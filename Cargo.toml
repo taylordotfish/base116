@@ -1,0 +1,15 @@
+[package]
+name = "base116"
+version = "0.1.0"
+edition = "2018"
+
+[features]
+default = ["std"]
+alloc = []
+std = ["alloc"]
+cli-panic = []
+doc_cfg = []
+
+[[bin]]
+name = "base116"
+required-features = ["alloc"]
