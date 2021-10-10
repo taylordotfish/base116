@@ -1,19 +1,40 @@
+/*
+ * Copyright (C) 2021 taylor.fish <contact@taylor.fish>
+ *
+ * This file is part of base116.
+ *
+ * base116 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * base116 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with base116. If not, see <https://www.gnu.org/licenses/>.
+ */
+
 use std::ffi::OsStr;
 use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::io::{stdin, stdout, BufReader, BufWriter, Read, Stdout, Write};
+use std::iter::once;
 use std::path::Path;
 use std::process::exit;
 
 const USAGE: &str = "\
 Usage: base116 [options] [file]
 
-Encodes or decodes base-116 data from [file] and writes the
-result to standard output. If [file] is missing or \"-\",
-the data is read from standard input.
+Encodes or decodes base-116 data from [file] and writes the result to standard
+output. If [file] is missing or \"-\", the data is read from standard input.
 
 Options:
   -d --decode   Decode data instead of encoding
+  --no-wrapper  When decoding, don't require wrapping 'Ǳ' and 'ǲ' characters.
+                When encoding, don't output wrapper characters.
   -h --help     Show this help message
   -v --version  Show program version
 ";
@@ -51,6 +72,7 @@ fn expect<T, E: Debug>(result: Result<T, E>, msg: impl Display) -> T {
 
 struct ParsedArgs<'a> {
     pub decode: bool,
+    pub wrap: bool,
     pub path: Option<&'a Path>,
 }
 
@@ -81,6 +103,7 @@ where
     let mut decode = false;
     let mut file: Option<&'a OsStr> = None;
     let mut options_done = false;
+    let mut wrap = true;
 
     let mut process_arg = |arg: &'a OsStr, astr: &str| {
         match astr {
@@ -94,6 +117,10 @@ where
             "--version" => show_version(),
             "--decode" => {
                 decode = true;
+                return;
+            }
+            "--no-wrapper" => {
+                wrap = false;
                 return;
             }
             s if s.starts_with("--") => {
@@ -125,6 +152,7 @@ where
 
     ParsedArgs {
         decode,
+        wrap,
         path: file.map(Path::new),
     }
 }
@@ -133,25 +161,29 @@ fn flush_stdout(writer: &mut BufWriter<Stdout>) {
     expect(writer.flush(), "could not write to standard output");
 }
 
-fn encode(stream: &mut impl Read) {
-    let reader = BufReader::new(stream);
+fn encode_with(iter: impl Iterator<Item = u8>) {
     let mut writer = BufWriter::new(stdout());
-    base116::encode_to_bytes(
-        reader.bytes().map(|b| expect(b, "could not read input")),
-    )
-    .for_each(|b| {
+    iter.for_each(|b| {
         expect(writer.write_all(&[b]), "could not write to standard output");
     });
     flush_stdout(&mut writer);
 }
 
-fn decode(stream: &mut impl Read) {
+fn encode(stream: &mut impl Read, wrap: bool) {
     let reader = BufReader::new(stream);
-    let mut writer = BufWriter::new(stdout());
-    base116::decode_bytes(
+    let iter = base116::encode_to_bytes(
         reader.bytes().map(|b| expect(b, "could not read input")),
-    )
-    .for_each(|b| match b {
+    );
+    if wrap {
+        encode_with(iter);
+    } else {
+        encode_with(remove_output_wrapper(iter));
+    }
+}
+
+fn decode_with(iter: impl Iterator<Item = u8>) {
+    let mut writer = BufWriter::new(stdout());
+    base116::decode_bytes(iter).for_each(|b| match b {
         Ok(b) => {
             expect(
                 writer.write_all(&[b]),
@@ -166,10 +198,79 @@ fn decode(stream: &mut impl Read) {
     flush_stdout(&mut writer);
 }
 
+fn decode(stream: &mut impl Read, require_wrapper: bool) {
+    let reader = BufReader::new(stream);
+    let iter = reader.bytes().map(|b| expect(b, "could not read input"));
+    if require_wrapper {
+        decode_with(iter);
+    } else {
+        decode_with(add_input_wrapper(iter));
+    }
+}
+
+const WRAP_START: [u8; 2] = [0xc7, 0xb1]; // 'Ǳ' as UTF-8
+const WRAP_END: [u8; 2] = [0xc7, 0xb2]; // 'ǲ' as UTF-8
+
+fn remove_end_wrapper<I>(iter: I) -> impl Iterator<Item = u8>
+where
+    I: Iterator<Item = u8>,
+{
+    iter.scan(0, |i, item| {
+        let (wrap_len, include_item, new_i) = match item {
+            _ if *i == WRAP_END.len() => (*i, true, 0),
+            b if b == WRAP_END[*i] => (0, false, *i + 1),
+            _ => (*i, true, 0),
+        };
+        *i = new_i;
+        Some(
+            IntoIterator::into_iter(WRAP_END)
+                .take(wrap_len)
+                .chain(once(item).take(include_item as _)),
+        )
+    })
+    .flatten()
+}
+
+fn add_input_wrapper<I>(mut iter: I) -> impl Iterator<Item = u8>
+where
+    I: Iterator<Item = u8>,
+{
+    let mut start = WRAP_START;
+    let count = iter
+        .by_ref()
+        .take(WRAP_START.len())
+        .enumerate()
+        .map(|(i, b)| {
+            start[i] = b;
+        })
+        .count();
+
+    IntoIterator::into_iter(WRAP_START)
+        .take(if start[..count] == WRAP_START {
+            0
+        } else {
+            usize::MAX
+        })
+        .chain(IntoIterator::into_iter(start).take(count))
+        .chain(remove_end_wrapper(iter))
+        .chain(IntoIterator::into_iter(WRAP_END))
+}
+
+fn remove_output_wrapper<I>(mut iter: I) -> impl Iterator<Item = u8>
+where
+    I: Iterator<Item = u8>,
+{
+    for _ in WRAP_START {
+        iter.next();
+    }
+    remove_end_wrapper(iter)
+}
+
 fn main() {
     let args: Vec<_> = std::env::args_os().skip(1).collect();
     let ParsedArgs {
         decode: should_decode,
+        wrap,
         path,
     } = parse_args(args.iter().map(|s| s.as_os_str()));
 
@@ -181,16 +282,16 @@ fn main() {
     .map_or_else(
         || {
             if should_decode {
-                decode(&mut stdin());
+                decode(&mut stdin(), wrap);
             } else {
-                encode(&mut stdin());
+                encode(&mut stdin(), wrap);
             }
         },
         |mut file| {
             if should_decode {
-                decode(&mut file);
+                decode(&mut file, wrap);
             } else {
-                encode(&mut file);
+                encode(&mut file, wrap);
             }
         },
     );
