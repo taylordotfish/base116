@@ -1,6 +1,6 @@
 use super::{END_CHAR, END_UTF8, START_CHAR, START_UTF8};
 use std::array;
-use std::iter::{once, Chain, Flatten, Once, Skip, Take};
+use std::iter::{once, Chain, Flatten, FusedIterator, Once, Skip, Take};
 use std::marker::PhantomData;
 
 type RemoveEndWrapper<I> = Flatten<RemoveEnd<I, Utf8Suffix>>;
@@ -178,4 +178,12 @@ where
         let (lower, upper) = self.iter.size_hint();
         (lower.saturating_sub(N), upper)
     }
+}
+
+impl<I, S, const N: usize> FusedIterator for RemoveEnd<I, S>
+where
+    S: Suffix<Type = [I::Item; N]>,
+    I: FusedIterator,
+    I::Item: Copy + PartialEq,
+{
 }

@@ -386,6 +386,8 @@ impl<I: Iterator<Item = u8>> Iterator for WrapperlessCharEncoder<I> {
     }
 }
 
+impl<I: Iterator<Item = u8>> FusedIterator for WrapperlessCharEncoder<I> {}
+
 pub fn encode_to_chars_no_wrapper<I>(
     bytes: I,
 ) -> WrapperlessCharEncoder<I::IntoIter>
@@ -417,6 +419,8 @@ impl<I: Iterator<Item = u8>> Iterator for WrapperlessBytesEncoder<I> {
         self.0.size_hint()
     }
 }
+
+impl<I: Iterator<Item = u8>> FusedIterator for WrapperlessBytesEncoder<I> {}
 
 pub fn encode_to_bytes_no_wrapper<I>(
     bytes: I,
