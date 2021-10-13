@@ -158,8 +158,7 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let (lower, upper) = self.iter.size_hint();
-        (0, upper)
+        (0, self.iter.size_hint().1)
     }
 }
 
