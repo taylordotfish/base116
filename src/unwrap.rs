@@ -31,11 +31,7 @@ where
         .count();
 
     IntoIterator::into_iter(START_UTF8)
-        .take(if start[..count] == START_UTF8 {
-            0
-        } else {
-            usize::MAX
-        })
+        .take(((start[..count] != START_UTF8) as usize).wrapping_neg())
         .chain(IntoIterator::into_iter(start).take(count))
         .chain(remove_end_wrapper(iter))
         .chain(IntoIterator::into_iter(END_UTF8))
