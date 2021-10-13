@@ -20,6 +20,7 @@
 use super::iter::{BaseIterator, ErrAdapter, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
 use super::wrap::{add_input_char_wrapper, add_input_wrapper};
+use super::wrap::{AddInputCharWrapper, AddInputWrapper};
 use super::Digit;
 use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
@@ -589,12 +590,6 @@ where
     CharDecoder::new(chars.into_iter())
 }
 
-pub fn decode_chars_no_wrapper<I: IntoIterator<Item = char>>(
-    bytes: I,
-) -> impl Iterator<Item = DecodeResult<u8>> {
-    decode_chars(add_input_char_wrapper(bytes.into_iter()))
-}
-
 pub fn decode_bytes<I>(bytes: I) -> BytesDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
@@ -602,12 +597,72 @@ where
     BytesDecoder::new(bytes.into_iter())
 }
 
-pub fn decode_bytes_no_wrapper<I: IntoIterator<Item = u8>>(
-    bytes: I,
-) -> impl Iterator<Item = DecodeBytesResult<u8>> {
-    decode_bytes(add_input_wrapper(bytes.into_iter()))
-}
-
 pub fn decode_str(s: &str) -> StrDecoder<'_> {
     StrDecoder::new(s)
+}
+
+pub struct WrapperlessCharDecoder<I>(CharDecoder<AddInputCharWrapper<I>>)
+where
+    I: Iterator<Item = char>;
+
+impl<I: Iterator<Item = char>> Iterator for WrapperlessCharDecoder<I> {
+    type Item = DecodeResult<u8>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn fold<B, F>(self, init: B, f: F) -> B
+    where
+        F: FnMut(B, Self::Item) -> B,
+    {
+        self.0.fold(init, f)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+pub fn decode_chars_no_wrapper<I>(
+    bytes: I,
+) -> WrapperlessCharDecoder<I::IntoIter>
+where
+    I: IntoIterator<Item = char>,
+{
+    WrapperlessCharDecoder(decode_chars(add_input_char_wrapper(
+        bytes.into_iter(),
+    )))
+}
+
+pub struct WrapperlessBytesDecoder<I>(BytesDecoder<AddInputWrapper<I>>)
+where
+    I: Iterator<Item = u8>;
+
+impl<I: Iterator<Item = u8>> Iterator for WrapperlessBytesDecoder<I> {
+    type Item = DecodeBytesResult<u8>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn fold<B, F>(self, init: B, f: F) -> B
+    where
+        F: FnMut(B, Self::Item) -> B,
+    {
+        self.0.fold(init, f)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+pub fn decode_bytes_no_wrapper<I>(
+    bytes: I,
+) -> WrapperlessBytesDecoder<I::IntoIter>
+where
+    I: IntoIterator<Item = u8>,
+{
+    WrapperlessBytesDecoder(decode_bytes(add_input_wrapper(bytes.into_iter())))
 }

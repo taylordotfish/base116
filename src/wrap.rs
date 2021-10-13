@@ -1,25 +1,29 @@
 use super::{END_CHAR, END_UTF8, START_CHAR, START_UTF8};
-use std::iter::once;
+use std::array;
+use std::iter::{once, Chain, Flatten, Once, Skip, Take};
+use std::marker::PhantomData;
 
-fn remove_end_wrapper<I>(iter: I) -> impl Iterator<Item = u8>
+type RemoveEndWrapper<I> = Flatten<RemoveEnd<I, Utf8Suffix>>;
+
+fn remove_end_wrapper<I>(iter: I) -> RemoveEndWrapper<I>
 where
     I: Iterator<Item = u8>,
 {
-    iter.scan(0, |i, item| {
-        let emit = END_UTF8.get(*i) != Some(&item);
-        let iter = IntoIterator::into_iter(END_UTF8)
-            .take({
-                // `*i` if `emit`; otherwise 0
-                *i & (emit as usize).wrapping_neg()
-            })
-            .chain(once(item).take(emit as usize));
-        *i += !emit as usize;
-        Some(iter)
-    })
-    .flatten()
+    RemoveEnd::new(iter, Utf8Suffix).flatten()
 }
 
-pub fn add_input_wrapper<I>(mut iter: I) -> impl Iterator<Item = u8>
+pub type AddInputWrapper<I> = Chain<
+    Chain<
+        Chain<
+            Skip<Take<array::IntoIter<u8, { START_UTF8.len() }>>>,
+            Take<array::IntoIter<u8, { START_UTF8.len() * 2 }>>,
+        >,
+        RemoveEndWrapper<I>,
+    >,
+    array::IntoIter<u8, { END_UTF8.len() }>,
+>;
+
+pub fn add_input_wrapper<I>(mut iter: I) -> AddInputWrapper<I>
 where
     I: Iterator<Item = u8>,
 {
@@ -46,7 +50,9 @@ where
         .chain(IntoIterator::into_iter(END_UTF8))
 }
 
-pub fn remove_output_wrapper<I>(mut iter: I) -> impl Iterator<Item = u8>
+pub type RemoveOutputWrapper<I> = RemoveEndWrapper<I>;
+
+pub fn remove_output_wrapper<I>(mut iter: I) -> RemoveOutputWrapper<I>
 where
     I: Iterator<Item = u8>,
 {
@@ -56,21 +62,21 @@ where
     remove_end_wrapper(iter)
 }
 
-pub fn remove_end_char_wrapper<I>(iter: I) -> impl Iterator<Item = char>
+type RemoveEndCharWrapper<I> = Flatten<RemoveEnd<I, CharSuffix>>;
+
+fn remove_end_char_wrapper<I>(iter: I) -> RemoveEndCharWrapper<I>
 where
     I: Iterator<Item = char>,
 {
-    iter.scan(false, |end_pending, item| {
-        let is_end = item == END_CHAR;
-        let iter = IntoIterator::into_iter([item, END_CHAR])
-            .take(*end_pending as usize + !is_end as usize);
-        *end_pending = is_end;
-        Some(iter)
-    })
-    .flatten()
+    RemoveEnd::new(iter, CharSuffix).flatten()
 }
 
-pub fn add_input_char_wrapper<I>(mut iter: I) -> impl Iterator<Item = char>
+pub type AddInputCharWrapper<I> = Chain<
+    Chain<Skip<Take<array::IntoIter<char, 2>>>, RemoveEndCharWrapper<I>>,
+    Once<char>,
+>;
+
+pub fn add_input_char_wrapper<I>(mut iter: I) -> AddInputCharWrapper<I>
 where
     I: Iterator<Item = char>,
 {
@@ -82,9 +88,71 @@ where
         .chain(once(END_CHAR))
 }
 
+pub type RemoveOutputCharWrapper<I> = RemoveEndCharWrapper<I>;
+
 pub fn remove_output_char_wrapper<I: Iterator<Item = char>>(
     mut iter: I,
-) -> impl Iterator<Item = char> {
+) -> RemoveOutputCharWrapper<I> {
     iter.next();
     remove_end_char_wrapper(iter)
+}
+
+pub trait Suffix {
+    type Type;
+    fn suffix() -> Self::Type;
+}
+
+pub struct Utf8Suffix;
+pub struct CharSuffix;
+
+impl Suffix for CharSuffix {
+    type Type = [char; 1];
+
+    fn suffix() -> Self::Type {
+        [END_CHAR]
+    }
+}
+
+impl Suffix for Utf8Suffix {
+    type Type = [u8; END_UTF8.len()];
+
+    fn suffix() -> Self::Type {
+        END_UTF8
+    }
+}
+
+pub struct RemoveEnd<I, S> {
+    iter: I,
+    i: usize,
+    phantom: PhantomData<*const S>,
+}
+
+impl<I, S> RemoveEnd<I, S> {
+    fn new(iter: I, _: S) -> Self {
+        Self {
+            iter,
+            i: 0,
+            phantom: Default::default(),
+        }
+    }
+}
+
+impl<I, S, const N: usize> Iterator for RemoveEnd<I, S>
+where
+    S: Suffix<Type = [I::Item; N]>,
+    I: Iterator,
+    I::Item: Copy + PartialEq,
+{
+    #[allow(clippy::type_complexity)]
+    type Item = Chain<Take<array::IntoIter<I::Item, N>>, Take<Once<I::Item>>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let item = self.iter.next()?;
+        let emit = S::suffix().get(self.i) == Some(&item);
+        let iter = IntoIterator::into_iter(S::suffix())
+            .take(self.i & (emit as usize).wrapping_neg())
+            .chain(once(item).take(emit as usize));
+        self.i += !emit as usize;
+        Some(iter)
+    }
 }

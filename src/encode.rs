@@ -20,6 +20,7 @@
 use super::iter::{BaseIterator, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
 use super::wrap::{remove_output_char_wrapper, remove_output_wrapper};
+use super::wrap::{RemoveOutputCharWrapper, RemoveOutputWrapper};
 use super::Digit;
 use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
@@ -338,25 +339,11 @@ where
     CharEncoder::new(bytes.into_iter())
 }
 
-pub fn encode_to_chars_no_wrapper<I>(bytes: I) -> impl Iterator<Item = char>
-where
-    I: IntoIterator<Item = u8>,
-{
-    remove_output_char_wrapper(encode_to_chars(bytes))
-}
-
 pub fn encode_to_bytes<I>(bytes: I) -> Utf8Encoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
     Utf8Encoder::new(bytes.into_iter())
-}
-
-pub fn encode_to_bytes_no_wrapper<I>(bytes: I) -> impl Iterator<Item = u8>
-where
-    I: IntoIterator<Item = u8>,
-{
-    remove_output_wrapper(encode_to_bytes(bytes))
 }
 
 #[cfg(feature = "alloc")]
@@ -374,4 +361,68 @@ where
 
     // SAFETY: `Utf8Encoder` always produces valid UTF-8.
     unsafe { String::from_utf8_unchecked(utf8) }
+}
+
+pub struct WrapperlessCharEncoder<I>(RemoveOutputCharWrapper<CharEncoder<I>>)
+where
+    I: Iterator<Item = u8>;
+
+impl<I: Iterator<Item = u8>> Iterator for WrapperlessCharEncoder<I> {
+    type Item = char;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn fold<B, F>(self, init: B, f: F) -> B
+    where
+        F: FnMut(B, Self::Item) -> B,
+    {
+        self.0.fold(init, f)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+pub fn encode_to_chars_no_wrapper<I>(
+    bytes: I,
+) -> WrapperlessCharEncoder<I::IntoIter>
+where
+    I: IntoIterator<Item = u8>,
+{
+    WrapperlessCharEncoder(remove_output_char_wrapper(encode_to_chars(bytes)))
+}
+
+pub struct WrapperlessBytesEncoder<I>(RemoveOutputWrapper<Utf8Encoder<I>>)
+where
+    I: Iterator<Item = u8>;
+
+impl<I: Iterator<Item = u8>> Iterator for WrapperlessBytesEncoder<I> {
+    type Item = u8;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn fold<B, F>(self, init: B, f: F) -> B
+    where
+        F: FnMut(B, Self::Item) -> B,
+    {
+        self.0.fold(init, f)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+pub fn encode_to_bytes_no_wrapper<I>(
+    bytes: I,
+) -> WrapperlessBytesEncoder<I::IntoIter>
+where
+    I: IntoIterator<Item = u8>,
+{
+    WrapperlessBytesEncoder(remove_output_wrapper(encode_to_bytes(bytes)))
 }
