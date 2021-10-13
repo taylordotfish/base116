@@ -19,7 +19,7 @@
 
 use super::iter::{BaseIterator, ErrAdapter, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
-use super::unwrap::add_input_wrapper;
+use super::wrap::{add_input_char_wrapper, add_input_wrapper};
 use super::Digit;
 use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
@@ -587,6 +587,12 @@ where
     I: IntoIterator<Item = char>,
 {
     CharDecoder::new(chars.into_iter())
+}
+
+pub fn decode_chars_no_wrapper<I: IntoIterator<Item = char>>(
+    bytes: I,
+) -> impl Iterator<Item = DecodeResult<u8>> {
+    decode_chars(add_input_char_wrapper(bytes.into_iter()))
 }
 
 pub fn decode_bytes<I>(bytes: I) -> BytesDecoder<I::IntoIter>

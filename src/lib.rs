@@ -28,7 +28,7 @@ pub mod decode;
 pub mod encode;
 mod iter;
 mod ranges;
-mod unwrap;
+mod wrap;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
