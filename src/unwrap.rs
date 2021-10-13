@@ -8,7 +8,10 @@ where
     iter.scan(0, |i, item| {
         let emit = END_UTF8.get(*i) != Some(&item);
         let iter = IntoIterator::into_iter(END_UTF8)
-            .take(*i & (emit as usize).wrapping_neg())
+            .take({
+                // `*i` if `emit`; otherwise 0
+                *i & (emit as usize).wrapping_neg()
+            })
             .chain(once(item).take(emit as usize));
         *i += !emit as usize;
         Some(iter)
@@ -31,7 +34,10 @@ where
         .count();
 
     IntoIterator::into_iter(START_UTF8)
-        .take(((start[..count] != START_UTF8) as usize).wrapping_neg())
+        .take({
+            // 0 if `start[..count] == START_UTF8`; otherwise `usize::MAX`
+            ((start[..count] != START_UTF8) as usize).wrapping_neg()
+        })
         .chain(IntoIterator::into_iter(start).take(count))
         .chain(remove_end_wrapper(iter))
         .chain(IntoIterator::into_iter(END_UTF8))
