@@ -597,12 +597,9 @@ where
     BytesDecoder::new(bytes.into_iter())
 }
 
-pub fn decode_bytes_no_wrapper<I>(
+pub fn decode_bytes_no_wrapper<I: IntoIterator<Item = u8>>(
     bytes: I,
-) -> impl Iterator<Item = DecodeBytesResult<u8>>
-where
-    I: IntoIterator<Item = u8>,
-{
+) -> impl Iterator<Item = DecodeBytesResult<u8>> {
     decode_bytes(add_input_wrapper(bytes.into_iter()))
 }
 
