@@ -322,15 +322,8 @@ where
             .map(|res| {
                 res.map_or_else(
                     |e| {
-                        IntoIterator::into_iter([
-                            Err(e),
-                            Ok(0),
-                            Ok(0),
-                            Ok(0),
-                            Ok(0),
-                            Ok(0),
-                        ])
-                        .take(1)
+                        let arr = [Err(e), Ok(0), Ok(0), Ok(0), Ok(0), Ok(0)];
+                        IntoIterator::into_iter(arr).take(1)
                     },
                     |arr| IntoIterator::into_iter(arr.map(Ok)).take(len - 1),
                 )
