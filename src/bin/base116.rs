@@ -21,9 +21,11 @@ use std::ffi::OsStr;
 use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::io::{stdin, stdout, BufReader, BufWriter, Read, Stdout, Write};
-use std::iter::once;
 use std::path::Path;
 use std::process::exit;
+
+use base116::decode::{decode_bytes, decode_bytes_no_wrapper};
+use base116::encode::{encode_to_bytes, encode_to_bytes_no_wrapper};
 
 const USAGE: &str = "\
 Usage: base116 [options] [file]
@@ -172,19 +174,17 @@ fn encode_with(iter: impl Iterator<Item = u8>) {
 
 fn encode(stream: &mut impl Read, wrap: bool) {
     let reader = BufReader::new(stream);
-    let iter = base116::encode_to_bytes(
-        reader.bytes().map(|b| expect(b, "could not read input")),
-    );
+    let iter = reader.bytes().map(|b| expect(b, "could not read input"));
     if wrap {
-        encode_with(iter);
+        encode_with(encode_to_bytes(iter));
     } else {
-        encode_with(remove_output_wrapper(iter));
+        encode_with(encode_to_bytes_no_wrapper(iter));
     }
 }
 
-fn decode_with(iter: impl Iterator<Item = u8>) {
+fn decode_with<E: Display>(iter: impl Iterator<Item = Result<u8, E>>) {
     let mut writer = BufWriter::new(stdout());
-    base116::decode_bytes(iter).for_each(|b| match b {
+    iter.for_each(|b| match b {
         Ok(b) => {
             expect(
                 writer.write_all(&[b]),
@@ -203,63 +203,10 @@ fn decode(stream: &mut impl Read, require_wrapper: bool) {
     let reader = BufReader::new(stream);
     let iter = reader.bytes().map(|b| expect(b, "could not read input"));
     if require_wrapper {
-        decode_with(iter);
+        decode_with(decode_bytes(iter));
     } else {
-        decode_with(add_input_wrapper(iter));
+        decode_with(decode_bytes_no_wrapper(iter));
     }
-}
-
-const WRAP_START: [u8; 2] = [0xc7, 0xb1]; // 'Ǳ' as UTF-8
-const WRAP_END: [u8; 2] = [0xc7, 0xb2]; // 'ǲ' as UTF-8
-
-fn remove_end_wrapper<I>(iter: I) -> impl Iterator<Item = u8>
-where
-    I: Iterator<Item = u8>,
-{
-    iter.scan(0, |i, item| {
-        let emit = WRAP_END.get(*i) != Some(&item);
-        let iter = IntoIterator::into_iter(WRAP_END)
-            .take(*i & (emit as usize).wrapping_neg())
-            .chain(once(item).take(emit as usize));
-        *i += !emit as usize;
-        Some(iter)
-    })
-    .flatten()
-}
-
-fn add_input_wrapper<I>(mut iter: I) -> impl Iterator<Item = u8>
-where
-    I: Iterator<Item = u8>,
-{
-    let mut start = WRAP_START;
-    let count = iter
-        .by_ref()
-        .take(WRAP_START.len())
-        .enumerate()
-        .map(|(i, b)| {
-            start[i] = b;
-        })
-        .count();
-
-    IntoIterator::into_iter(WRAP_START)
-        .take(if start[..count] == WRAP_START {
-            0
-        } else {
-            usize::MAX
-        })
-        .chain(IntoIterator::into_iter(start).take(count))
-        .chain(remove_end_wrapper(iter))
-        .chain(IntoIterator::into_iter(WRAP_END))
-}
-
-fn remove_output_wrapper<I>(mut iter: I) -> impl Iterator<Item = u8>
-where
-    I: Iterator<Item = u8>,
-{
-    for _ in WRAP_START {
-        iter.next();
-    }
-    remove_end_wrapper(iter)
 }
 
 fn main() {

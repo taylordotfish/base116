@@ -20,6 +20,7 @@
 use super::const_digit;
 use super::iter::{BaseIterator, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
+use super::unwrap::remove_output_wrapper;
 use super::Digit;
 use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
@@ -343,6 +344,13 @@ where
     I: IntoIterator<Item = u8>,
 {
     Utf8Encoder::new(bytes.into_iter())
+}
+
+pub fn encode_to_bytes_no_wrapper<I>(bytes: I) -> impl Iterator<Item = u8>
+where
+    I: IntoIterator<Item = u8>,
+{
+    remove_output_wrapper(encode_to_bytes(bytes))
 }
 
 #[cfg(feature = "alloc")]
