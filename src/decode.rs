@@ -17,6 +17,7 @@
  * along with base116. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::const_digit;
 use super::iter::{BaseIterator, ErrAdapter, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
 use super::Digit;
@@ -203,7 +204,7 @@ where
     type Item = CharsToUnflatDigitsItem;
 
     fn next(&mut self) -> Option<Self::Item> {
-        const D0: Digit = Digit::zero();
+        const D0: Digit = const_digit!(0);
 
         fn to_digit(n: u16, c: char) -> Digit {
             if let Some(d) = u8::try_from(n).ok().and_then(Digit::new) {
@@ -290,7 +291,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         // SAFETY: `116 - 1` is less than 116.
-        let mut digits = [unsafe { Digit::new_unchecked(116 - 1) }; 7];
+        let mut digits = [const_digit!(116 - 1); 7];
         let mut len = 0;
         self.0
             .by_ref()

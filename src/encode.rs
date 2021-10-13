@@ -17,6 +17,7 @@
  * along with base116. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::const_digit;
 use super::iter::{BaseIterator, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
 use super::Digit;
@@ -71,7 +72,7 @@ where
             return None;
         }
 
-        let mut digits = [Digit::zero(); DIGITS_PER_CHUNK];
+        let mut digits = [const_digit!(0); DIGITS_PER_CHUNK];
         digits.iter_mut().rev().for_each(|d| {
             // SAFETY: `sum % 116` is always less than 116.
             *d = unsafe { Digit::new_unchecked((sum % 116) as u8) };

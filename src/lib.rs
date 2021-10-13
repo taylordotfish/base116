@@ -37,9 +37,19 @@ const END_CHAR: char = '\u{1f2}';
 const L1_MULT: u16 = 116 + 1;
 const L2_MULT: u16 = 116 * L1_MULT + 1;
 
+#[macro_use]
 mod digit {
     #[derive(Clone, Copy)]
     pub struct Digit(u8);
+
+    #[macro_export]
+    macro_rules! const_digit {
+        ($n:expr) => {{
+            use crate::digit::Digit;
+            const DIGIT: Digit = Digit::__const($n);
+            DIGIT
+        }};
+    }
 
     impl Digit {
         pub fn new(x: u8) -> Option<Self> {
@@ -54,8 +64,10 @@ mod digit {
             Self(x)
         }
 
-        pub const fn zero() -> Self {
-            Self(0)
+        #[doc(hidden)]
+        pub const fn __const(n: u8) -> Self {
+            const BOUNDS_CHECK: [u8; 1] = [0];
+            Self(n + BOUNDS_CHECK[(n >= 116) as usize])
         }
     }
 

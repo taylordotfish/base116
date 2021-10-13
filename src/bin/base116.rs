@@ -45,11 +45,12 @@ mod error_exit {
 
     macro_rules! error_exit {
         ($($args:tt)*) => {
-            crate::error_exit::_run(format_args!($($args)*));
+            crate::error_exit::__run(format_args!($($args)*));
         };
     }
 
-    pub fn _run(args: impl Display) -> ! {
+    #[doc(hidden)]
+    pub fn __run(args: impl Display) -> ! {
         eprintln!("error: {}", args);
         if cfg!(feature = "cli-panic") {
             panic!("error: {}", args);
@@ -216,17 +217,12 @@ where
     I: Iterator<Item = u8>,
 {
     iter.scan(0, |i, item| {
-        let (wrap_len, include_item, new_i) = match item {
-            _ if *i == WRAP_END.len() => (*i, true, 0),
-            b if b == WRAP_END[*i] => (0, false, *i + 1),
-            _ => (*i, true, 0),
-        };
-        *i = new_i;
-        Some(
-            IntoIterator::into_iter(WRAP_END)
-                .take(wrap_len)
-                .chain(once(item).take(include_item as _)),
-        )
+        let emit = WRAP_END.get(*i) != Some(&item);
+        let iter = IntoIterator::into_iter(WRAP_END)
+            .take(*i & (emit as usize).wrapping_neg())
+            .chain(once(item).take(emit as usize));
+        *i += !emit as usize;
+        Some(iter)
     })
     .flatten()
 }
