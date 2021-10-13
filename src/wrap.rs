@@ -137,6 +137,22 @@ impl<I, S> RemoveEnd<I, S> {
     }
 }
 
+impl<I, S, const N: usize> RemoveEnd<I, S>
+where
+    S: Suffix<Type = [I::Item; N]>,
+    I: Iterator,
+    I::Item: Copy + PartialEq,
+{
+    fn scan(item: I::Item, i: &mut usize) -> <Self as Iterator>::Item {
+        let emit = S::suffix().get(*i) == Some(&item);
+        let iter = IntoIterator::into_iter(S::suffix())
+            .take(*i & (emit as usize).wrapping_neg())
+            .chain(once(item).take(emit as usize));
+        *i += !emit as usize;
+        iter
+    }
+}
+
 impl<I, S, const N: usize> Iterator for RemoveEnd<I, S>
 where
     S: Suffix<Type = [I::Item; N]>,
@@ -147,12 +163,19 @@ where
     type Item = Chain<Take<array::IntoIter<I::Item, N>>, Take<Once<I::Item>>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item = self.iter.next()?;
-        let emit = S::suffix().get(self.i) == Some(&item);
-        let iter = IntoIterator::into_iter(S::suffix())
-            .take(self.i & (emit as usize).wrapping_neg())
-            .chain(once(item).take(emit as usize));
-        self.i += !emit as usize;
-        Some(iter)
+        self.iter.next().map(|item| Self::scan(item, &mut self.i))
+    }
+
+    fn fold<B, F>(mut self, init: B, mut f: F) -> B
+    where
+        F: FnMut(B, Self::Item) -> B,
+    {
+        let i = &mut self.i;
+        self.iter.fold(init, |b, item| f(b, Self::scan(item, i)))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (lower, upper) = self.iter.size_hint();
+        (lower.saturating_sub(N), upper)
     }
 }
