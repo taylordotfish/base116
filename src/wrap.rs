@@ -37,7 +37,7 @@ where
     IntoIterator::into_iter(START_UTF8)
         .take(START_UTF8.len() + count)
         .skip({
-            // `START_UTF8.len()` if start is present in `iter`; otherwise 0
+            // `START_UTF8.len()` if start was present in `iter`; otherwise 0
             START_UTF8.len()
                 & ((start[..count] == START_UTF8) as usize).wrapping_neg()
         })
