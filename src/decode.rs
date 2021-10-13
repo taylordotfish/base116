@@ -17,7 +17,6 @@
  * along with base116. If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::const_digit;
 use super::iter::{BaseIterator, ErrAdapter, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
 use super::unwrap::add_input_wrapper;
