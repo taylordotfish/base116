@@ -156,6 +156,11 @@ where
             Some,
         )
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (lower, upper) = self.iter.size_hint();
+        (0, upper)
+    }
 }
 
 impl<I, Err, T> FusedIterator for ErrAdapter<I, Err> where
