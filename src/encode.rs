@@ -353,11 +353,9 @@ where
     I: IntoIterator<Item = u8>,
 {
     let utf8: Vec<u8> = encode_to_bytes(bytes).collect();
-
-    #[cfg(debug_assertions)]
-    let utf8 = String::from_utf8(utf8)
-        .expect("[debug] encoded data is not valid utf-8 -- this is UB!")
-        .into_bytes();
+    if cfg!(debug_assertions) {
+        std::str::from_utf8(&utf8).expect("invalid utf-8: this is UB!");
+    }
 
     // SAFETY: `Utf8Encoder` always produces valid UTF-8.
     unsafe { String::from_utf8_unchecked(utf8) }
@@ -429,4 +427,20 @@ where
     I: IntoIterator<Item = u8>,
 {
     WrapperlessBytesEncoder(remove_output_wrapper(encode_to_bytes(bytes)))
+}
+
+#[cfg(feature = "alloc")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+pub fn encode_to_string_no_wrapper<I>(bytes: I) -> String
+where
+    I: IntoIterator<Item = u8>,
+{
+    let utf8: Vec<u8> = encode_to_bytes_no_wrapper(bytes).collect();
+    if cfg!(debug_assertions) {
+        std::str::from_utf8(&utf8).expect("invalid utf-8: this is UB!");
+    }
+
+    // SAFETY: `Utf8Encoder` always produces valid UTF-8, and
+    // `WrapperlessBytesEncoder` preserves valid UTF-8.
+    unsafe { String::from_utf8_unchecked(utf8) }
 }

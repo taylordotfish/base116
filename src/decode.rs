@@ -669,3 +669,9 @@ where
 {
     WrapperlessBytesDecoder(decode_bytes(add_input_wrapper(bytes.into_iter())))
 }
+
+pub fn decode_str_no_wrapper(s: &str) -> StrDecoder<'_> {
+    let s = s.strip_prefix(START_CHAR).unwrap_or(s);
+    let s = s.strip_suffix(END_CHAR).unwrap_or(s);
+    StrDecoder::new(s)
+}
