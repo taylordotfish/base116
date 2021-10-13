@@ -395,11 +395,11 @@ where
     WrapperlessCharEncoder(remove_output_char_wrapper(encode_to_chars(bytes)))
 }
 
-pub struct WrapperlessBytesEncoder<I>(RemoveOutputWrapper<Utf8Encoder<I>>)
+pub struct WrapperlessUtf8Encoder<I>(RemoveOutputWrapper<Utf8Encoder<I>>)
 where
     I: Iterator<Item = u8>;
 
-impl<I: Iterator<Item = u8>> Iterator for WrapperlessBytesEncoder<I> {
+impl<I: Iterator<Item = u8>> Iterator for WrapperlessUtf8Encoder<I> {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -418,15 +418,15 @@ impl<I: Iterator<Item = u8>> Iterator for WrapperlessBytesEncoder<I> {
     }
 }
 
-impl<I: Iterator<Item = u8>> FusedIterator for WrapperlessBytesEncoder<I> {}
+impl<I: Iterator<Item = u8>> FusedIterator for WrapperlessUtf8Encoder<I> {}
 
 pub fn encode_to_bytes_no_wrapper<I>(
     bytes: I,
-) -> WrapperlessBytesEncoder<I::IntoIter>
+) -> WrapperlessUtf8Encoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    WrapperlessBytesEncoder(remove_output_wrapper(encode_to_bytes(bytes)))
+    WrapperlessUtf8Encoder(remove_output_wrapper(encode_to_bytes(bytes)))
 }
 
 #[cfg(feature = "alloc")]
@@ -441,6 +441,6 @@ where
     }
 
     // SAFETY: `Utf8Encoder` always produces valid UTF-8, and
-    // `WrapperlessBytesEncoder` preserves valid UTF-8.
+    // `WrapperlessUtf8Encoder` preserves valid UTF-8.
     unsafe { String::from_utf8_unchecked(utf8) }
 }
