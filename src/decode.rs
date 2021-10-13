@@ -291,7 +291,6 @@ where
     type Item = DigitsToUnflatBytesItem;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // SAFETY: `116 - 1` is less than 116.
         let mut digits = [const_digit!(116 - 1); 7];
         let mut len = 0;
         self.0
