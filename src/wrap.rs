@@ -14,10 +14,7 @@ where
 
 pub type AddInputWrapper<I> = Chain<
     Chain<
-        Chain<
-            Skip<Take<array::IntoIter<u8, { START_UTF8.len() }>>>,
-            Take<array::IntoIter<u8, { START_UTF8.len() * 2 }>>,
-        >,
+        Skip<Take<array::IntoIter<u8, { START_UTF8.len() * 2 }>>>,
         RemoveEndWrapper<I>,
     >,
     array::IntoIter<u8, { END_UTF8.len() }>,
@@ -38,14 +35,13 @@ where
         })
         .count();
 
-    IntoIterator::into_iter(START_UTF8)
+    IntoIterator::into_iter(start)
         .take(START_UTF8.len() + count)
         .skip({
             // `START_UTF8.len()` if start was present in `iter`; otherwise 0
             START_UTF8.len()
                 & ((start[..count] == START_UTF8) as usize).wrapping_neg()
         })
-        .chain(IntoIterator::into_iter(start).take(count))
         .chain(remove_end_wrapper(iter))
         .chain(IntoIterator::into_iter(END_UTF8))
 }
