@@ -572,7 +572,7 @@ where
         F: FnMut(B, Self::Item) -> B,
     {
         let b: Result<B, Infallible> = self.0.try_fold(init, |b, item| {
-            Ok(f(b, item.map_err(|e| DecodeBytesError::DecodeError(e))))
+            Ok(f(b, item.map_err(DecodeBytesError::DecodeError)))
         });
         let b = b.unwrap();
         if let Some(e) = self.0.base_iterator().take_err() {
