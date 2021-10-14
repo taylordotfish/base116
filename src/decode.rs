@@ -24,7 +24,7 @@ use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
 
 use core::array;
-use core::convert::TryFrom;
+use core::convert::{Infallible, TryFrom};
 use core::fmt::{self, Debug, Display, Formatter};
 use core::iter::{FusedIterator, Take};
 use core::str::Chars;
@@ -564,6 +564,21 @@ where
             Some(Ok(b)) => Some(Ok(b)),
             Some(Err(e)) => Some(Err(DecodeBytesError::DecodeError(e))),
             None => None,
+        }
+    }
+
+    fn fold<B, F>(mut self, init: B, mut f: F) -> B
+    where
+        F: FnMut(B, Self::Item) -> B,
+    {
+        let b: Result<B, Infallible> = self.0.try_fold(init, |b, item| {
+            Ok(f(b, item.map_err(|e| DecodeBytesError::DecodeError(e))))
+        });
+        let b = b.unwrap();
+        if let Some(e) = self.0.base_iterator().take_err() {
+            f(b, Err(DecodeBytesError::InvalidUtf8(e)))
+        } else {
+            b
         }
     }
 
