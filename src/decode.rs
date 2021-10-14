@@ -31,6 +31,9 @@ use core::fmt::{self, Debug, Display, Formatter};
 use core::iter::{FusedIterator, Take};
 use core::str::Chars;
 
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum DecodeError {
@@ -667,4 +670,13 @@ pub fn decode_str_no_wrapper(s: &str) -> StrDecoder<'_> {
     let s = s.strip_prefix(START_CHAR).unwrap_or(s);
     let s = s.strip_suffix(END_CHAR).unwrap_or(s);
     StrDecoder::new(s)
+}
+
+#[cfg(feature = "alloc")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+pub fn decode_to_vec<D, E>(decoder: D) -> Result<Vec<u8>, E>
+where
+    D: Iterator<Item = Result<u8, E>>,
+{
+    decoder.collect()
 }

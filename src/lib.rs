@@ -48,6 +48,8 @@ const L2_MULT: u16 = 116 * L1_MULT + 1;
 pub use decode::decode_bytes;
 pub use decode::decode_chars;
 pub use decode::decode_str;
+#[cfg(feature = "alloc")]
+pub use decode::decode_to_vec;
 
 pub use encode::encode_to_bytes;
 pub use encode::encode_to_chars;
