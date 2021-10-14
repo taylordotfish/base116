@@ -28,7 +28,6 @@ pub mod decode;
 pub mod encode;
 mod iter;
 mod ranges;
-mod wrap;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -38,9 +37,6 @@ const DIGITS_PER_CHUNK: usize = 7;
 
 const START_CHAR: char = '\u{1f1}';
 const END_CHAR: char = '\u{1f2}';
-
-const START_UTF8: [u8; 2] = [0xc7, 0xb1];
-const END_UTF8: [u8; 2] = [0xc7, 0xb2];
 
 const L1_MULT: u16 = 116 + 1;
 const L2_MULT: u16 = 116 * L1_MULT + 1;

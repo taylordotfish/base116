@@ -19,8 +19,6 @@
 
 use super::iter::{BaseIterator, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
-use super::wrap::{remove_output_char_wrapper, remove_output_wrapper};
-use super::wrap::{RemoveOutputCharWrapper, RemoveOutputWrapper};
 use super::Digit;
 use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
@@ -152,6 +150,7 @@ enum CharEncoderState {
 }
 
 pub struct CharEncoder<I> {
+    wrapper: bool,
     state: CharEncoderState,
     iter: DigitsToChar<
         Flatten<
@@ -162,9 +161,14 @@ pub struct CharEncoder<I> {
 }
 
 impl<I: Iterator> CharEncoder<I> {
-    pub(crate) fn new(iter: I) -> Self {
+    pub(crate) fn new(iter: I, wrapper: bool) -> Self {
         Self {
-            state: CharEncoderState::Init,
+            wrapper,
+            state: if wrapper {
+                CharEncoderState::Init
+            } else {
+                CharEncoderState::Running
+            },
             iter: DigitsToChar::new(Flatten::new(BytesToUnflatDigits::new(
                 BaseIterator(iter.fuse()),
             ))),
@@ -194,7 +198,7 @@ where
             }
             CharEncoderState::Running => self.iter.next().or_else(|| {
                 self.state = CharEncoderState::Done;
-                Some(END_CHAR)
+                self.wrapper.then(|| END_CHAR)
             }),
             CharEncoderState::Done => None,
         }
@@ -281,8 +285,10 @@ pub struct Utf8Encoder<I>(
 );
 
 impl<I: Iterator> Utf8Encoder<I> {
-    pub(crate) fn new(iter: I) -> Self {
-        Self(Flatten::new(CharsToUnflatUtf8::new(CharEncoder::new(iter))))
+    pub(crate) fn new(iter: I, wrapper: bool) -> Self {
+        Self(Flatten::new(CharsToUnflatUtf8::new(CharEncoder::new(
+            iter, wrapper,
+        ))))
     }
 }
 
@@ -336,14 +342,14 @@ pub fn encode_to_chars<I>(bytes: I) -> CharEncoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    CharEncoder::new(bytes.into_iter())
+    encode_to_chars_with_wrapper(bytes, true)
 }
 
 pub fn encode_to_bytes<I>(bytes: I) -> Utf8Encoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    Utf8Encoder::new(bytes.into_iter())
+    encode_to_bytes_with_wrapper(bytes, true)
 }
 
 #[cfg(feature = "alloc")]
@@ -352,95 +358,40 @@ pub fn encode_to_string<I>(bytes: I) -> String
 where
     I: IntoIterator<Item = u8>,
 {
-    let utf8: Vec<u8> = encode_to_bytes(bytes).collect();
+    encode_to_string_with_wrapper(bytes, true)
+}
+
+pub fn encode_to_chars_with_wrapper<I>(
+    bytes: I,
+    wrapper: bool,
+) -> CharEncoder<I::IntoIter>
+where
+    I: IntoIterator<Item = u8>,
+{
+    CharEncoder::new(bytes.into_iter(), wrapper)
+}
+
+pub fn encode_to_bytes_with_wrapper<I>(
+    bytes: I,
+    wrapper: bool,
+) -> Utf8Encoder<I::IntoIter>
+where
+    I: IntoIterator<Item = u8>,
+{
+    Utf8Encoder::new(bytes.into_iter(), wrapper)
+}
+
+#[cfg(feature = "alloc")]
+#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
+pub fn encode_to_string_with_wrapper<I>(bytes: I, wrapper: bool) -> String
+where
+    I: IntoIterator<Item = u8>,
+{
+    let utf8: Vec<u8> = encode_to_bytes_with_wrapper(bytes, wrapper).collect();
     if cfg!(debug_assertions) {
         std::str::from_utf8(&utf8).expect("invalid utf-8: this is UB!");
     }
 
     // SAFETY: `Utf8Encoder` always produces valid UTF-8.
-    unsafe { String::from_utf8_unchecked(utf8) }
-}
-
-pub struct WrapperlessCharEncoder<I>(RemoveOutputCharWrapper<CharEncoder<I>>)
-where
-    I: Iterator<Item = u8>;
-
-impl<I: Iterator<Item = u8>> Iterator for WrapperlessCharEncoder<I> {
-    type Item = char;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-
-    fn fold<B, F>(self, init: B, f: F) -> B
-    where
-        F: FnMut(B, Self::Item) -> B,
-    {
-        self.0.fold(init, f)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-impl<I: Iterator<Item = u8>> FusedIterator for WrapperlessCharEncoder<I> {}
-
-pub fn encode_to_chars_no_wrapper<I>(
-    bytes: I,
-) -> WrapperlessCharEncoder<I::IntoIter>
-where
-    I: IntoIterator<Item = u8>,
-{
-    WrapperlessCharEncoder(remove_output_char_wrapper(encode_to_chars(bytes)))
-}
-
-pub struct WrapperlessUtf8Encoder<I>(RemoveOutputWrapper<Utf8Encoder<I>>)
-where
-    I: Iterator<Item = u8>;
-
-impl<I: Iterator<Item = u8>> Iterator for WrapperlessUtf8Encoder<I> {
-    type Item = u8;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-
-    fn fold<B, F>(self, init: B, f: F) -> B
-    where
-        F: FnMut(B, Self::Item) -> B,
-    {
-        self.0.fold(init, f)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-impl<I: Iterator<Item = u8>> FusedIterator for WrapperlessUtf8Encoder<I> {}
-
-pub fn encode_to_bytes_no_wrapper<I>(
-    bytes: I,
-) -> WrapperlessUtf8Encoder<I::IntoIter>
-where
-    I: IntoIterator<Item = u8>,
-{
-    WrapperlessUtf8Encoder(remove_output_wrapper(encode_to_bytes(bytes)))
-}
-
-#[cfg(feature = "alloc")]
-#[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
-pub fn encode_to_string_no_wrapper<I>(bytes: I) -> String
-where
-    I: IntoIterator<Item = u8>,
-{
-    let utf8: Vec<u8> = encode_to_bytes_no_wrapper(bytes).collect();
-    if cfg!(debug_assertions) {
-        std::str::from_utf8(&utf8).expect("invalid utf-8: this is UB!");
-    }
-
-    // SAFETY: `Utf8Encoder` always produces valid UTF-8, and
-    // `WrapperlessUtf8Encoder` preserves valid UTF-8.
     unsafe { String::from_utf8_unchecked(utf8) }
 }

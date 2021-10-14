@@ -19,8 +19,6 @@
 
 use super::iter::{BaseIterator, ErrAdapter, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
-use super::wrap::{add_input_char_wrapper, add_input_wrapper};
-use super::wrap::{AddInputCharWrapper, AddInputWrapper};
 use super::Digit;
 use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
@@ -124,14 +122,42 @@ enum UnwrapStringState {
 
 struct UnwrapString<I> {
     iter: I,
+    wrapper: bool,
     state: UnwrapStringState,
 }
 
 impl<I> UnwrapString<I> {
-    pub fn new(iter: I) -> Self {
+    pub fn new(iter: I, wrapper: bool) -> Self {
         Self {
             iter,
+            wrapper,
             state: UnwrapStringState::Init,
+        }
+    }
+}
+
+impl<I> UnwrapString<I>
+where
+    I: Iterator<Item = char>,
+{
+    fn handle_running(
+        &mut self,
+        c: Option<char>,
+    ) -> Option<DecodeResult<char>> {
+        match c {
+            Some(END_CHAR) => {
+                self.state = UnwrapStringState::Done;
+                self.iter.next().map(|c| Err(Error::TrailingData(c)))
+            }
+            Some(c) => Some(Ok(c)),
+            None => {
+                self.state = UnwrapStringState::Done;
+                if self.wrapper {
+                    Some(Err(Error::MissingEnd))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -158,23 +184,20 @@ where
                         self.state = UnwrapStringState::Running;
                         continue;
                     }
-                    Some(_) => Some(Err(Error::MissingStart)),
-                    None => {
-                        self.state = UnwrapStringState::Done;
-                        None
+                    c => {
+                        if self.wrapper {
+                            self.state = UnwrapStringState::Done;
+                            Some(Err(Error::MissingStart))
+                        } else {
+                            self.state = UnwrapStringState::Running;
+                            self.handle_running(c)
+                        }
                     }
                 },
-                UnwrapStringState::Running => match self.iter.next() {
-                    Some(END_CHAR) => {
-                        self.state = UnwrapStringState::Done;
-                        self.iter.next().map(|c| Err(Error::TrailingData(c)))
-                    }
-                    Some(c) => Some(Ok(c)),
-                    None => {
-                        self.state = UnwrapStringState::Done;
-                        Some(Err(Error::MissingEnd))
-                    }
-                },
+                UnwrapStringState::Running => {
+                    let item = self.iter.next();
+                    self.handle_running(item)
+                }
                 UnwrapStringState::Done => None,
             };
         }
@@ -353,9 +376,9 @@ struct BaseDecoder<I>(
 );
 
 impl<I> BaseDecoder<I> {
-    pub fn new(iter: I) -> Self {
+    pub fn new(iter: I, wrapper: bool) -> Self {
         Self(Flatten::new(DigitsToUnflatBytes::new(Flatten::new(
-            CharsToUnflatDigits::new(UnwrapString::new(iter)),
+            CharsToUnflatDigits::new(UnwrapString::new(iter, wrapper)),
         ))))
     }
 }
@@ -391,8 +414,8 @@ impl<I: FusedIterator<Item = char>> FusedIterator for BaseDecoder<I> {}
 pub struct CharDecoder<I>(BaseDecoder<BaseIterator<I>>);
 
 impl<I> CharDecoder<I> {
-    pub(crate) fn new(iter: I) -> Self {
-        Self(BaseDecoder::new(BaseIterator(iter)))
+    pub(crate) fn new(iter: I, wrapper: bool) -> Self {
+        Self(BaseDecoder::new(BaseIterator(iter), wrapper))
     }
 }
 
@@ -515,10 +538,13 @@ pub struct BytesDecoder<I>(
 );
 
 impl<I> BytesDecoder<I> {
-    pub(crate) fn new(iter: I) -> Self {
-        Self(BaseDecoder::new(BaseIterator(ErrAdapter::new(
-            Utf8ToChars::new(BaseIterator(iter)),
-        ))))
+    pub(crate) fn new(iter: I, wrapper: bool) -> Self {
+        Self(BaseDecoder::new(
+            BaseIterator(ErrAdapter::new(Utf8ToChars::new(BaseIterator(
+                iter,
+            )))),
+            wrapper,
+        ))
     }
 }
 
@@ -551,8 +577,8 @@ impl<I: FusedIterator<Item = u8>> FusedIterator for BytesDecoder<I> {}
 pub struct StrDecoder<'a>(BaseDecoder<BaseIterator<Chars<'a>>>);
 
 impl<'a> StrDecoder<'a> {
-    pub(crate) fn new(s: &'a str) -> Self {
-        Self(BaseDecoder::new(BaseIterator(s.chars())))
+    pub(crate) fn new(s: &'a str, wrapper: bool) -> Self {
+        Self(BaseDecoder::new(BaseIterator(s.chars()), wrapper))
     }
 }
 
@@ -582,94 +608,42 @@ pub fn decode_chars<I>(chars: I) -> CharDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = char>,
 {
-    CharDecoder::new(chars.into_iter())
+    decode_chars_with_wrapper(chars, true)
 }
 
 pub fn decode_bytes<I>(bytes: I) -> BytesDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    BytesDecoder::new(bytes.into_iter())
+    decode_bytes_with_wrapper(bytes, true)
 }
 
 pub fn decode_str(s: &str) -> StrDecoder<'_> {
-    StrDecoder::new(s)
+    decode_str_with_wrapper(s, true)
 }
 
-pub struct WrapperlessCharDecoder<I>(CharDecoder<AddInputCharWrapper<I>>)
-where
-    I: Iterator<Item = char>;
-
-impl<I: Iterator<Item = char>> Iterator for WrapperlessCharDecoder<I> {
-    type Item = DecodeResult<u8>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-
-    fn fold<B, F>(self, init: B, f: F) -> B
-    where
-        F: FnMut(B, Self::Item) -> B,
-    {
-        self.0.fold(init, f)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-impl<I: Iterator<Item = char>> FusedIterator for WrapperlessCharDecoder<I> {}
-
-pub fn decode_chars_no_wrapper<I>(
-    bytes: I,
-) -> WrapperlessCharDecoder<I::IntoIter>
+pub fn decode_chars_with_wrapper<I>(
+    chars: I,
+    wrapper: bool,
+) -> CharDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = char>,
 {
-    WrapperlessCharDecoder(decode_chars(add_input_char_wrapper(
-        bytes.into_iter(),
-    )))
+    CharDecoder::new(chars.into_iter(), wrapper)
 }
 
-pub struct WrapperlessBytesDecoder<I>(BytesDecoder<AddInputWrapper<I>>)
-where
-    I: Iterator<Item = u8>;
-
-impl<I: Iterator<Item = u8>> Iterator for WrapperlessBytesDecoder<I> {
-    type Item = DecodeBytesResult<u8>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-
-    fn fold<B, F>(self, init: B, f: F) -> B
-    where
-        F: FnMut(B, Self::Item) -> B,
-    {
-        self.0.fold(init, f)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.0.size_hint()
-    }
-}
-
-impl<I: Iterator<Item = u8>> FusedIterator for WrapperlessBytesDecoder<I> {}
-
-pub fn decode_bytes_no_wrapper<I>(
+pub fn decode_bytes_with_wrapper<I>(
     bytes: I,
-) -> WrapperlessBytesDecoder<I::IntoIter>
+    wrapper: bool,
+) -> BytesDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    WrapperlessBytesDecoder(decode_bytes(add_input_wrapper(bytes.into_iter())))
+    BytesDecoder::new(bytes.into_iter(), wrapper)
 }
 
-pub fn decode_str_no_wrapper(s: &str) -> StrDecoder<'_> {
-    let s = s.strip_prefix(START_CHAR).unwrap_or(s);
-    let s = s.strip_suffix(END_CHAR).unwrap_or(s);
-    StrDecoder::new(s)
+pub fn decode_str_with_wrapper(s: &str, wrapper: bool) -> StrDecoder<'_> {
+    StrDecoder::new(s, wrapper)
 }
 
 #[cfg(feature = "alloc")]

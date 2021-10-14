@@ -24,8 +24,8 @@ use std::io::{stdin, stdout, BufReader, BufWriter, Read, Stdout, Write};
 use std::path::Path;
 use std::process::exit;
 
-use base116::decode::{decode_bytes, decode_bytes_no_wrapper};
-use base116::encode::{encode_to_bytes, encode_to_bytes_no_wrapper};
+use base116::decode::decode_bytes_with_wrapper;
+use base116::encode::encode_to_bytes_with_wrapper;
 
 const USAGE: &str = "\
 Usage: base116 [options] [file]
@@ -164,27 +164,27 @@ fn flush_stdout(writer: &mut BufWriter<Stdout>) {
     expect(writer.flush(), "could not write to standard output");
 }
 
-fn encode_with(iter: impl Iterator<Item = u8>) {
+fn encode(stream: &mut impl Read, wrap: bool) {
+    let reader = BufReader::new(stream);
     let mut writer = BufWriter::new(stdout());
-    iter.for_each(|b| {
+    encode_to_bytes_with_wrapper(
+        reader.bytes().map(|b| expect(b, "could not read input")),
+        wrap,
+    )
+    .for_each(|b| {
         expect(writer.write_all(&[b]), "could not write to standard output");
     });
     flush_stdout(&mut writer);
 }
 
-fn encode(stream: &mut impl Read, wrap: bool) {
+fn decode(stream: &mut impl Read, require_wrapper: bool) {
     let reader = BufReader::new(stream);
-    let iter = reader.bytes().map(|b| expect(b, "could not read input"));
-    if wrap {
-        encode_with(encode_to_bytes(iter));
-    } else {
-        encode_with(encode_to_bytes_no_wrapper(iter));
-    }
-}
-
-fn decode_with<E: Display>(iter: impl Iterator<Item = Result<u8, E>>) {
     let mut writer = BufWriter::new(stdout());
-    iter.for_each(|b| match b {
+    decode_bytes_with_wrapper(
+        reader.bytes().map(|b| expect(b, "could not read input")),
+        require_wrapper,
+    )
+    .for_each(|b| match b {
         Ok(b) => {
             expect(
                 writer.write_all(&[b]),
@@ -197,16 +197,6 @@ fn decode_with<E: Display>(iter: impl Iterator<Item = Result<u8, E>>) {
         }
     });
     flush_stdout(&mut writer);
-}
-
-fn decode(stream: &mut impl Read, require_wrapper: bool) {
-    let reader = BufReader::new(stream);
-    let iter = reader.bytes().map(|b| expect(b, "could not read input"));
-    if require_wrapper {
-        decode_with(decode_bytes(iter));
-    } else {
-        decode_with(decode_bytes_no_wrapper(iter));
-    }
 }
 
 fn main() {
