@@ -18,9 +18,9 @@
  */
 
 use super::{END_CHAR, END_UTF8, START_CHAR, START_UTF8};
-use std::array;
-use std::iter::{once, Chain, Flatten, FusedIterator, Once, Skip, Take};
+use std::iter::{once, Chain, Flatten, FusedIterator, Once, Take};
 use std::marker::PhantomData;
+use std::{array, option};
 
 type RemoveEndWrapper<I> = Flatten<RemoveEnd<I, Utf8Suffix>>;
 
@@ -33,8 +33,10 @@ where
 
 pub type AddInputWrapper<I> = Chain<
     Chain<
-        Skip<Take<array::IntoIter<u8, { START_UTF8.len() * 2 }>>>,
-        RemoveEndWrapper<I>,
+        Take<array::IntoIter<u8, { START_UTF8.len() }>>,
+        RemoveEndWrapper<
+            Chain<Take<array::IntoIter<u8, { START_UTF8.len() }>>, I>,
+        >,
     >,
     array::IntoIter<u8, { END_UTF8.len() }>,
 >;
@@ -43,25 +45,24 @@ pub fn add_input_wrapper<I>(mut iter: I) -> AddInputWrapper<I>
 where
     I: Iterator<Item = u8>,
 {
-    let mut start = [0; START_UTF8.len() * 2];
-    start[..START_UTF8.len()].copy_from_slice(&START_UTF8);
+    let mut start = [0; START_UTF8.len()];
     let count = iter
         .by_ref()
         .take(START_UTF8.len())
         .enumerate()
         .map(|(i, b)| {
-            start[START_UTF8.len() + i] = b;
+            start[i] = b;
         })
         .count();
 
-    IntoIterator::into_iter(start)
-        .take(START_UTF8.len() + count)
-        .skip({
-            // `START_UTF8.len()` if start was present in `iter`; otherwise 0
-            START_UTF8.len()
-                & ((start[..count] == START_UTF8) as usize).wrapping_neg()
+    IntoIterator::into_iter(START_UTF8)
+        .take({
+            // `0` if `start == START_UTF8`; otherwise `usize::MAX`
+            ((start != START_UTF8) as usize).wrapping_neg()
         })
-        .chain(remove_end_wrapper(iter))
+        .chain(remove_end_wrapper(
+            IntoIterator::into_iter(start).take(count).chain(iter),
+        ))
         .chain(IntoIterator::into_iter(END_UTF8))
 }
 
@@ -87,7 +88,10 @@ where
 }
 
 pub type AddInputCharWrapper<I> = Chain<
-    Chain<Skip<Take<array::IntoIter<char, 2>>>, RemoveEndCharWrapper<I>>,
+    Chain<
+        Take<Once<char>>,
+        RemoveEndCharWrapper<Chain<option::IntoIter<char>, I>>,
+    >,
     Once<char>,
 >;
 
@@ -96,10 +100,9 @@ where
     I: Iterator<Item = char>,
 {
     let first = iter.next();
-    IntoIterator::into_iter([START_CHAR, first.unwrap_or('\0')])
-        .take(1 + first.is_some() as usize)
-        .skip((first == Some(START_CHAR)) as usize)
-        .chain(remove_end_char_wrapper(iter))
+    once(START_CHAR)
+        .take((first != Some(START_CHAR)) as usize)
+        .chain(remove_end_char_wrapper(first.into_iter().chain(iter)))
         .chain(once(END_CHAR))
 }
 
@@ -159,11 +162,12 @@ where
     I::Item: Copy + PartialEq,
 {
     fn scan(item: I::Item, i: &mut usize) -> <Self as Iterator>::Item {
-        let emit = S::suffix().get(*i) == Some(&item);
+        let emit = S::suffix().get(*i) != Some(&item);
         let iter = IntoIterator::into_iter(S::suffix())
             .take(*i & (emit as usize).wrapping_neg())
             .chain(once(item).take(emit as usize));
-        *i += !emit as usize;
+        *i += 1;
+        *i &= (!emit as usize).wrapping_neg();
         iter
     }
 }
