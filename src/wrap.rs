@@ -17,18 +17,19 @@
  * along with base116. If not, see <https://www.gnu.org/licenses/>.
  */
 
+use super::iter::{BaseIterator, Flatten, InspectBaseIterator};
 use super::{END_CHAR, END_UTF8, START_CHAR, START_UTF8};
-use std::iter::{once, Chain, Flatten, FusedIterator, Once, Take};
+use std::iter::{once, Chain, FusedIterator, Once, Take};
 use std::marker::PhantomData;
 use std::{array, option};
 
-type RemoveEndWrapper<I> = Flatten<RemoveEnd<I, Utf8Suffix>>;
+type RemoveEndWrapper<I> = RemoveEnd<I, Utf8Suffix>;
 
 fn remove_end_wrapper<I>(iter: I) -> RemoveEndWrapper<I>
 where
     I: Iterator<Item = u8>,
 {
-    RemoveEnd::new(iter, Utf8Suffix).flatten()
+    RemoveEnd::new(iter)
 }
 
 pub type AddInputWrapper<I> = Chain<
@@ -78,13 +79,13 @@ where
     remove_end_wrapper(iter)
 }
 
-type RemoveEndCharWrapper<I> = Flatten<RemoveEnd<I, CharSuffix>>;
+type RemoveEndCharWrapper<I> = RemoveEnd<I, CharSuffix>;
 
 fn remove_end_char_wrapper<I>(iter: I) -> RemoveEndCharWrapper<I>
 where
     I: Iterator<Item = char>,
 {
-    RemoveEnd::new(iter, CharSuffix).flatten()
+    RemoveEnd::new(iter)
 }
 
 pub type AddInputCharWrapper<I> = Chain<
@@ -139,14 +140,14 @@ impl Suffix for Utf8Suffix {
     }
 }
 
-pub struct RemoveEnd<I, S> {
+pub struct UnflatRemoveEnd<I, S> {
     iter: I,
     i: usize,
     phantom: PhantomData<*const S>,
 }
 
-impl<I, S> RemoveEnd<I, S> {
-    fn new(iter: I, _: S) -> Self {
+impl<I, S> UnflatRemoveEnd<I, S> {
+    pub fn new(iter: I) -> Self {
         Self {
             iter,
             i: 0,
@@ -155,7 +156,7 @@ impl<I, S> RemoveEnd<I, S> {
     }
 }
 
-impl<I, S, const N: usize> RemoveEnd<I, S>
+impl<I, S, const N: usize> UnflatRemoveEnd<I, S>
 where
     S: Suffix<Type = [I::Item; N]>,
     I: Iterator,
@@ -172,7 +173,20 @@ where
     }
 }
 
-impl<I, S, const N: usize> Iterator for RemoveEnd<I, S>
+impl<I, S, const N: usize> InspectBaseIterator for UnflatRemoveEnd<I, S>
+where
+    S: Suffix<Type = [I::Item; N]>,
+    I: Iterator + InspectBaseIterator,
+    I::Item: Copy + PartialEq,
+{
+    type Iter = I::Iter;
+
+    fn base_iterator(&self) -> &Self::Iter {
+        self.iter.base_iterator()
+    }
+}
+
+impl<I, S, const N: usize> Iterator for UnflatRemoveEnd<I, S>
 where
     S: Suffix<Type = [I::Item; N]>,
     I: Iterator,
@@ -192,9 +206,47 @@ where
         let i = &mut self.i;
         self.iter.fold(init, |b, item| f(b, Self::scan(item, i)))
     }
+}
+
+pub struct RemoveEnd<I, S>(
+    Flatten<
+        UnflatRemoveEnd<BaseIterator<I>, S>,
+        <UnflatRemoveEnd<BaseIterator<I>, S> as Iterator>::Item,
+    >,
+)
+where
+    UnflatRemoveEnd<BaseIterator<I>, S>: Iterator;
+
+impl<I, S> RemoveEnd<I, S>
+where
+    UnflatRemoveEnd<BaseIterator<I>, S>: Iterator,
+{
+    fn new(iter: I) -> Self {
+        Self(Flatten::new(UnflatRemoveEnd::new(BaseIterator(iter))))
+    }
+}
+
+impl<I, S, const N: usize> Iterator for RemoveEnd<I, S>
+where
+    S: Suffix<Type = [I::Item; N]>,
+    I: Iterator,
+    I::Item: Copy + PartialEq,
+{
+    type Item = I::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+
+    fn fold<B, F>(self, init: B, f: F) -> B
+    where
+        F: FnMut(B, Self::Item) -> B,
+    {
+        self.0.fold(init, f)
+    }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let (lower, upper) = self.iter.size_hint();
+        let (lower, upper) = self.0.base_iterator().size_hint();
         (lower.saturating_sub(N), upper)
     }
 }

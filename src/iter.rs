@@ -56,6 +56,13 @@ impl<I: Iterator> Iterator for BaseIterator<I> {
 
 impl<I: Iterator> FusedIterator for BaseIterator<I> {}
 
+/// Like [`std::iter::Flatten`], but with some differences:
+///
+/// * There are no bounds on the type itself, unlike [`std::iter::Flatten`],
+///   which requires `I` to implement [`Iterator`] even when just naming the
+///   type. (This comes at the cost of having to specify the type of the
+///   sub-iterator explicitly.)
+/// * This type implements [`InspectBaseIterator`].
 pub struct Flatten<I, Sub> {
     iter: I,
     sub: Option<Sub>,
