@@ -512,14 +512,15 @@ where
         loop {
             match core::str::from_utf8(&bytes[..len]) {
                 Ok(s) => break Some(Ok(s.chars().next().unwrap())),
-                Err(e) if e.error_len().is_none() && len < bytes.len() => {
-                    if let Some(b) = self.0.next() {
-                        bytes[len] = b;
-                        len += 1;
-                        continue;
+                Err(e) => {
+                    if e.error_len().is_none() && len < bytes.len() {
+                        if let Some(b) = self.0.next() {
+                            bytes[len] = b;
+                            len += 1;
+                            continue;
+                        }
                     }
                 }
-                _ => {}
             }
             break Some(Err(InvalidUtf8 {
                 bytes,
