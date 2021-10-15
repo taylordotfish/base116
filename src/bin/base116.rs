@@ -24,19 +24,25 @@ use std::io::{stdin, stdout, BufReader, BufWriter, Read, Stdout, Write};
 use std::path::Path;
 use std::process::exit;
 
-use base116::decode::decode_bytes_with_wrapper;
-use base116::encode::encode_to_bytes_with_wrapper;
+use base116::decode::{decode_bytes_with, DecodeConfig};
+use base116::encode::{encode_to_bytes_with, EncodeConfig};
 
 const USAGE: &str = "\
 Usage: base116 [options] [file]
 
 Encodes or decodes base-116 data from [file] and writes the result to standard
-output. If [file] is missing or \"-\", the data is read from standard input.
+output. If [file] is missing or -, the data is read from standard input.
 
 Options:
   -d --decode   Decode data instead of encoding
+
   --no-wrapper  When decoding, don't require wrapping 'Ǳ' and 'ǲ' characters.
                 When encoding, don't output wrapper characters.
+
+  --relaxed     When decoding, ignore trailing data after ending 'ǲ'
+                character. Also ignore data before starting 'Ǳ' character,
+                unless --no-wrapper is set.
+
   -h --help     Show this help message
   -v --version  Show program version
 ";
@@ -76,6 +82,7 @@ fn expect<T, E: Debug>(result: Result<T, E>, msg: impl Display) -> T {
 struct ParsedArgs<'a> {
     pub decode: bool,
     pub wrap: bool,
+    pub relaxed: bool,
     pub path: Option<&'a Path>,
 }
 
@@ -104,9 +111,10 @@ where
     Args: IntoIterator<Item = &'a OsStr>,
 {
     let mut decode = false;
+    let mut wrap = true;
+    let mut relaxed = false;
     let mut file: Option<&'a OsStr> = None;
     let mut options_done = false;
-    let mut wrap = true;
 
     let mut process_arg = |arg: &'a OsStr, astr: &str| {
         match astr {
@@ -124,6 +132,10 @@ where
             }
             "--no-wrapper" => {
                 wrap = false;
+                return;
+            }
+            "--relaxed" => {
+                relaxed = true;
                 return;
             }
             s if s.starts_with("--") => {
@@ -153,9 +165,14 @@ where
         .map(|a| (a, a.to_string_lossy()))
         .for_each(|(arg, astr)| process_arg(arg, &*astr));
 
+    if relaxed && !decode {
+        args_error!("--relaxed is allowed only when decoding");
+    }
+
     ParsedArgs {
         decode,
         wrap,
+        relaxed,
         path: file.map(Path::new),
     }
 }
@@ -164,12 +181,12 @@ fn flush_stdout(writer: &mut BufWriter<Stdout>) {
     expect(writer.flush(), "could not write to standard output");
 }
 
-fn encode(stream: &mut impl Read, wrap: bool) {
+fn encode(stream: &mut impl Read, config: EncodeConfig) {
     let reader = BufReader::new(stream);
     let mut writer = BufWriter::new(stdout());
-    encode_to_bytes_with_wrapper(
+    encode_to_bytes_with(
         reader.bytes().map(|b| expect(b, "could not read input")),
-        wrap,
+        config,
     )
     .for_each(|b| {
         expect(writer.write_all(&[b]), "could not write to standard output");
@@ -177,12 +194,12 @@ fn encode(stream: &mut impl Read, wrap: bool) {
     flush_stdout(&mut writer);
 }
 
-fn decode(stream: &mut impl Read, require_wrapper: bool) {
+fn decode(stream: &mut impl Read, config: DecodeConfig) {
     let reader = BufReader::new(stream);
     let mut writer = BufWriter::new(stdout());
-    decode_bytes_with_wrapper(
+    decode_bytes_with(
         reader.bytes().map(|b| expect(b, "could not read input")),
-        require_wrapper,
+        config,
     )
     .for_each(|b| match b {
         Ok(b) => {
@@ -204,8 +221,16 @@ fn main() {
     let ParsedArgs {
         decode: should_decode,
         wrap,
+        relaxed,
         path,
     } = parse_args(args.iter().map(|s| s.as_os_str()));
+
+    let mut encode_config = EncodeConfig::new();
+    encode_config.add_wrapper = wrap;
+
+    let mut decode_config = DecodeConfig::new();
+    decode_config.require_wrapper = wrap;
+    decode_config.relaxed = relaxed;
 
     path.map(|path| {
         File::open(path).unwrap_or_else(|e| {
@@ -215,16 +240,16 @@ fn main() {
     .map_or_else(
         || {
             if should_decode {
-                decode(&mut stdin(), wrap);
+                decode(&mut stdin(), decode_config);
             } else {
-                encode(&mut stdin(), wrap);
+                encode(&mut stdin(), encode_config);
             }
         },
         |mut file| {
             if should_decode {
-                decode(&mut file, wrap);
+                decode(&mut file, decode_config);
             } else {
-                encode(&mut file, wrap);
+                encode(&mut file, encode_config);
             }
         },
     );

@@ -122,15 +122,15 @@ enum UnwrapStringState {
 
 struct UnwrapString<I> {
     iter: I,
-    wrapper: bool,
+    config: DecodeConfig,
     state: UnwrapStringState,
 }
 
 impl<I> UnwrapString<I> {
-    pub fn new(iter: I, wrapper: bool) -> Self {
+    pub fn new(iter: I, config: DecodeConfig) -> Self {
         Self {
             iter,
-            wrapper,
+            config,
             state: UnwrapStringState::Init,
         }
     }
@@ -147,12 +147,16 @@ where
         match c {
             Some(END_CHAR) => {
                 self.state = UnwrapStringState::Done;
-                self.iter.next().map(|c| Err(Error::TrailingData(c)))
+                if self.config.relaxed {
+                    None
+                } else {
+                    self.iter.next().map(|c| Err(Error::TrailingData(c)))
+                }
             }
             Some(c) => Some(Ok(c)),
             None => {
                 self.state = UnwrapStringState::Done;
-                if self.wrapper {
+                if self.config.require_wrapper {
                     Some(Err(Error::MissingEnd))
                 } else {
                     None
@@ -179,21 +183,30 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             break match self.state {
-                UnwrapStringState::Init => match self.iter.next() {
-                    Some(START_CHAR) => {
-                        self.state = UnwrapStringState::Running;
-                        continue;
-                    }
-                    c => {
-                        if self.wrapper {
-                            self.state = UnwrapStringState::Done;
-                            Some(Err(Error::MissingStart))
-                        } else {
+                UnwrapStringState::Init => {
+                    let item = if self.config.require_wrapper
+                        && self.config.relaxed
+                    {
+                        self.iter.find(|c| *c == START_CHAR)
+                    } else {
+                        self.iter.next()
+                    };
+                    match item {
+                        Some(START_CHAR) => {
                             self.state = UnwrapStringState::Running;
-                            self.handle_running(c)
+                            continue;
+                        }
+                        c => {
+                            if self.config.require_wrapper {
+                                self.state = UnwrapStringState::Done;
+                                Some(Err(Error::MissingStart))
+                            } else {
+                                self.state = UnwrapStringState::Running;
+                                self.handle_running(c)
+                            }
                         }
                     }
-                },
+                }
                 UnwrapStringState::Running => {
                     let item = self.iter.next();
                     self.handle_running(item)
@@ -383,9 +396,9 @@ struct BaseDecoder<I>(
 );
 
 impl<I> BaseDecoder<I> {
-    pub fn new(iter: I, wrapper: bool) -> Self {
+    pub fn new(iter: I, config: DecodeConfig) -> Self {
         Self(Flatten::new(DigitsToUnflatBytes::new(Flatten::new(
-            CharsToUnflatDigits::new(UnwrapString::new(iter, wrapper)),
+            CharsToUnflatDigits::new(UnwrapString::new(iter, config)),
         ))))
     }
 }
@@ -421,8 +434,8 @@ impl<I: FusedIterator<Item = char>> FusedIterator for BaseDecoder<I> {}
 pub struct CharDecoder<I>(BaseDecoder<BaseIterator<I>>);
 
 impl<I> CharDecoder<I> {
-    pub(crate) fn new(iter: I, wrapper: bool) -> Self {
-        Self(BaseDecoder::new(BaseIterator(iter), wrapper))
+    pub(crate) fn new(iter: I, config: DecodeConfig) -> Self {
+        Self(BaseDecoder::new(BaseIterator(iter), config))
     }
 }
 
@@ -546,12 +559,12 @@ pub struct BytesDecoder<I>(
 );
 
 impl<I> BytesDecoder<I> {
-    pub(crate) fn new(iter: I, wrapper: bool) -> Self {
+    pub(crate) fn new(iter: I, config: DecodeConfig) -> Self {
         Self(BaseDecoder::new(
             BaseIterator(ErrAdapter::new(Utf8ToChars::new(BaseIterator(
                 iter,
             )))),
-            wrapper,
+            config,
         ))
     }
 }
@@ -600,8 +613,8 @@ impl<I: FusedIterator<Item = u8>> FusedIterator for BytesDecoder<I> {}
 pub struct StrDecoder<'a>(BaseDecoder<BaseIterator<Chars<'a>>>);
 
 impl<'a> StrDecoder<'a> {
-    pub(crate) fn new(s: &'a str, wrapper: bool) -> Self {
-        Self(BaseDecoder::new(BaseIterator(s.chars()), wrapper))
+    pub(crate) fn new(s: &'a str, config: DecodeConfig) -> Self {
+        Self(BaseDecoder::new(BaseIterator(s.chars()), config))
     }
 }
 
@@ -631,42 +644,68 @@ pub fn decode_chars<I>(chars: I) -> CharDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = char>,
 {
-    decode_chars_with_wrapper(chars, true)
+    decode_chars_with(chars, DecodeConfig::new())
 }
 
 pub fn decode_bytes<I>(bytes: I) -> BytesDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    decode_bytes_with_wrapper(bytes, true)
+    decode_bytes_with(bytes, DecodeConfig::new())
 }
 
 pub fn decode_str(s: &str) -> StrDecoder<'_> {
-    decode_str_with_wrapper(s, true)
+    decode_str_with(s, DecodeConfig::new())
 }
 
-pub fn decode_chars_with_wrapper<I>(
+#[non_exhaustive]
+#[derive(Clone, Copy)]
+pub struct DecodeConfig {
+    pub require_wrapper: bool,
+    /// If true, trailing data after the ending ‘ǲ’ character will be ignored,
+    /// rather than causing an error. Additionally, if `require_wrapper` is
+    /// false, extra data before the starting ‘Ǳ’ character will also be
+    /// ignored.
+    pub relaxed: bool,
+}
+
+impl DecodeConfig {
+    pub const fn new() -> Self {
+        Self {
+            require_wrapper: true,
+            relaxed: false,
+        }
+    }
+}
+
+impl Default for DecodeConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn decode_chars_with<I>(
     chars: I,
-    wrapper: bool,
+    config: DecodeConfig,
 ) -> CharDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = char>,
 {
-    CharDecoder::new(chars.into_iter(), wrapper)
+    CharDecoder::new(chars.into_iter(), config)
 }
 
-pub fn decode_bytes_with_wrapper<I>(
+pub fn decode_bytes_with<I>(
     bytes: I,
-    wrapper: bool,
+    config: DecodeConfig,
 ) -> BytesDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    BytesDecoder::new(bytes.into_iter(), wrapper)
+    BytesDecoder::new(bytes.into_iter(), config)
 }
 
-pub fn decode_str_with_wrapper(s: &str, wrapper: bool) -> StrDecoder<'_> {
-    StrDecoder::new(s, wrapper)
+pub fn decode_str_with(s: &str, config: DecodeConfig) -> StrDecoder<'_> {
+    StrDecoder::new(s, config)
 }
 
 #[cfg(feature = "alloc")]

@@ -151,7 +151,7 @@ enum CharEncoderState {
 }
 
 pub struct CharEncoder<I> {
-    wrapper: bool,
+    config: EncodeConfig,
     state: CharEncoderState,
     iter: DigitsToChar<
         Flatten<
@@ -162,10 +162,10 @@ pub struct CharEncoder<I> {
 }
 
 impl<I: Iterator> CharEncoder<I> {
-    pub(crate) fn new(iter: I, wrapper: bool) -> Self {
+    pub(crate) fn new(iter: I, config: EncodeConfig) -> Self {
         Self {
-            wrapper,
-            state: if wrapper {
+            config,
+            state: if config.add_wrapper {
                 CharEncoderState::Init
             } else {
                 CharEncoderState::Running
@@ -199,7 +199,7 @@ where
             }
             CharEncoderState::Running => self.iter.next().or_else(|| {
                 self.state = CharEncoderState::Done;
-                self.wrapper.then(|| END_CHAR)
+                self.config.add_wrapper.then(|| END_CHAR)
             }),
             CharEncoderState::Done => None,
         }
@@ -286,9 +286,9 @@ pub struct Utf8Encoder<I>(
 );
 
 impl<I: Iterator> Utf8Encoder<I> {
-    pub(crate) fn new(iter: I, wrapper: bool) -> Self {
+    pub(crate) fn new(iter: I, config: EncodeConfig) -> Self {
         Self(Flatten::new(CharsToUnflatUtf8::new(CharEncoder::new(
-            iter, wrapper,
+            iter, config,
         ))))
     }
 }
@@ -343,14 +343,14 @@ pub fn encode_to_chars<I>(bytes: I) -> CharEncoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    encode_to_chars_with_wrapper(bytes, true)
+    encode_to_chars_with(bytes, EncodeConfig::new())
 }
 
 pub fn encode_to_bytes<I>(bytes: I) -> Utf8Encoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    encode_to_bytes_with_wrapper(bytes, true)
+    encode_to_bytes_with(bytes, EncodeConfig::new())
 }
 
 #[cfg(feature = "alloc")]
@@ -359,36 +359,56 @@ pub fn encode_to_string<I>(bytes: I) -> String
 where
     I: IntoIterator<Item = u8>,
 {
-    encode_to_string_with_wrapper(bytes, true)
+    encode_to_string_with(bytes, EncodeConfig::new())
 }
 
-pub fn encode_to_chars_with_wrapper<I>(
+#[non_exhaustive]
+#[derive(Clone, Copy)]
+pub struct EncodeConfig {
+    pub add_wrapper: bool,
+}
+
+impl EncodeConfig {
+    pub const fn new() -> Self {
+        Self {
+            add_wrapper: true,
+        }
+    }
+}
+
+impl Default for EncodeConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub fn encode_to_chars_with<I>(
     bytes: I,
-    wrapper: bool,
+    config: EncodeConfig,
 ) -> CharEncoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    CharEncoder::new(bytes.into_iter(), wrapper)
+    CharEncoder::new(bytes.into_iter(), config)
 }
 
-pub fn encode_to_bytes_with_wrapper<I>(
+pub fn encode_to_bytes_with<I>(
     bytes: I,
-    wrapper: bool,
+    config: EncodeConfig,
 ) -> Utf8Encoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
 {
-    Utf8Encoder::new(bytes.into_iter(), wrapper)
+    Utf8Encoder::new(bytes.into_iter(), config)
 }
 
 #[cfg(feature = "alloc")]
 #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
-pub fn encode_to_string_with_wrapper<I>(bytes: I, wrapper: bool) -> String
+pub fn encode_to_string_with<I>(bytes: I, config: EncodeConfig) -> String
 where
     I: IntoIterator<Item = u8>,
 {
-    let utf8: Vec<u8> = encode_to_bytes_with_wrapper(bytes, wrapper).collect();
+    let utf8: Vec<u8> = encode_to_bytes_with(bytes, config).collect();
     if cfg!(debug_assertions) {
         std::str::from_utf8(&utf8).expect("invalid utf-8: this is UB!");
     }
