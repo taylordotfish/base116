@@ -117,7 +117,8 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         let d = self.next_u16()?;
         match d {
-            0..=96 => Some(ranges::map_char(d, RANGES1).unwrap()),
+            // Use `96 - d` so that 0 maps to ~ instead of tab.
+            0..=96 => Some(ranges::map_char(96 - d, RANGES1).unwrap()),
             97..=111 => {
                 let d1 = (d - 97) * L1_MULT;
                 let d2 = self.next_u16().unwrap_or(L1_MULT - 1);

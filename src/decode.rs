@@ -248,6 +248,13 @@ where
             c.and_then(|c| {
                 match c.len_utf8() {
                     1 => ranges::unmap_char(c, RANGES1)
+                        .map(|n| {
+                            // When encoding digits <= 96, the encoder first
+                            // transforms the digit by subtracting it from 96
+                            // (so that 0 maps to ~ instead of tab). Here we
+                            // reverse that transformation accordingly.
+                            96 - n
+                        })
                         .map(|n| ([to_digit(n, c), D0, D0], 1)),
                     2 => ranges::unmap_char(c, RANGES2).map(|n| {
                         let d2 = n % L1_MULT;
