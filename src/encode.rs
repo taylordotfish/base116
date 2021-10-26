@@ -1,20 +1,20 @@
 /*
  * Copyright (C) 2021 taylor.fish <contact@taylor.fish>
  *
- * This file is part of base116.
+ * This file is part of Base116.
  *
- * base116 is free software: you can redistribute it and/or modify
+ * Base116 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
  * by the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * base116 is distributed in the hope that it will be useful,
+ * Base116 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with base116. If not, see <https://www.gnu.org/licenses/>.
+ * along with Base116. If not, see <https://www.gnu.org/licenses/>.
  */
 
 use super::iter::{BaseIterator, Flatten, InspectBaseIterator};
@@ -339,6 +339,7 @@ where
 
 impl<I: Iterator<Item = u8>> FusedIterator for Utf8Encoder<I> {}
 
+/// Encodes `bytes` as a sequence of base-116 [`char`]s.
 pub fn encode_to_chars<I>(bytes: I) -> CharEncoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
@@ -346,6 +347,7 @@ where
     encode_to_chars_with(bytes, EncodeConfig::new())
 }
 
+/// Encodes `bytes` to UTF-8 base-116 data.
 pub fn encode_to_bytes<I>(bytes: I) -> Utf8Encoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
@@ -353,6 +355,7 @@ where
     encode_to_bytes_with(bytes, EncodeConfig::new())
 }
 
+/// Encodes `bytes` to a base-116 [`String`].
 #[cfg(feature = "alloc")]
 #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
 pub fn encode_to_string<I>(bytes: I) -> String
@@ -362,9 +365,12 @@ where
     encode_to_string_with(bytes, EncodeConfig::new())
 }
 
+/// Used by the `encode_*_with` functions to configure the encoding process.
 #[non_exhaustive]
 #[derive(Clone, Copy)]
 pub struct EncodeConfig {
+    /// Whether to add wrapping ‘Ǳ’ and ‘ǲ’ characters to the output.
+    /// [default: true]
     pub add_wrapper: bool,
 }
 
@@ -382,6 +388,10 @@ impl Default for EncodeConfig {
     }
 }
 
+/// Encodes `bytes` as a sequence of base-116 [`char`]s with the given config.
+///
+/// This function is like [`encode_to_chars`], but takes a configuration
+/// object.
 pub fn encode_to_chars_with<I>(
     bytes: I,
     config: EncodeConfig,
@@ -392,6 +402,10 @@ where
     CharEncoder::new(bytes.into_iter(), config)
 }
 
+/// Encodes `bytes` to UTF-8 base-116 data with the given config.
+///
+/// This function is like [`encode_to_bytes`], but takes a configuration
+/// object.
 pub fn encode_to_bytes_with<I>(
     bytes: I,
     config: EncodeConfig,
@@ -402,6 +416,10 @@ where
     Utf8Encoder::new(bytes.into_iter(), config)
 }
 
+/// Encodes `bytes` to a base-116 [`String`] with the given config.
+///
+/// This function is like [`encode_to_string`], but takes a configuration
+/// object.
 #[cfg(feature = "alloc")]
 #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
 pub fn encode_to_string_with<I>(bytes: I, config: EncodeConfig) -> String

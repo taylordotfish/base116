@@ -1,20 +1,20 @@
 /*
  * Copyright (C) 2021 taylor.fish <contact@taylor.fish>
  *
- * This file is part of base116.
+ * This file is part of Base116.
  *
- * base116 is free software: you can redistribute it and/or modify
+ * Base116 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
  * by the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * base116 is distributed in the hope that it will be useful,
+ * Base116 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with base116. If not, see <https://www.gnu.org/licenses/>.
+ * along with Base116. If not, see <https://www.gnu.org/licenses/>.
  */
 
 use super::iter::{BaseIterator, ErrAdapter, Flatten, InspectBaseIterator};
@@ -640,6 +640,7 @@ impl<'a> Iterator for StrDecoder<'a> {
 
 impl<'a> FusedIterator for StrDecoder<'a> {}
 
+/// Decodes a sequence of base-116 chars.
 pub fn decode_chars<I>(chars: I) -> CharDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = char>,
@@ -647,6 +648,7 @@ where
     decode_chars_with(chars, DecodeConfig::new())
 }
 
+/// Decodes UTF-8 base-116 data.
 pub fn decode_bytes<I>(bytes: I) -> BytesDecoder<I::IntoIter>
 where
     I: IntoIterator<Item = u8>,
@@ -654,18 +656,22 @@ where
     decode_bytes_with(bytes, DecodeConfig::new())
 }
 
+/// Decodes a base-116 `str`.
 pub fn decode_str(s: &str) -> StrDecoder<'_> {
     decode_str_with(s, DecodeConfig::new())
 }
 
+/// Used by the `decode_*_with` functions to configure the decoding process.
 #[non_exhaustive]
 #[derive(Clone, Copy)]
 pub struct DecodeConfig {
+    /// Whether to require wrapping ‘Ǳ’ and ‘ǲ’ characters to be present.
+    /// [default: true]
     pub require_wrapper: bool,
     /// If true, trailing data after the ending ‘ǲ’ character will be ignored,
     /// rather than causing an error. Additionally, if `require_wrapper` is
     /// false, extra data before the starting ‘Ǳ’ character will also be
-    /// ignored.
+    /// ignored. [default: false]
     pub relaxed: bool,
 }
 
@@ -684,6 +690,9 @@ impl Default for DecodeConfig {
     }
 }
 
+/// Decodes a sequence of base-116 chars with the given config.
+///
+/// This function is like [`decode_chars`], but takes a configuration object.
 pub fn decode_chars_with<I>(
     chars: I,
     config: DecodeConfig,
@@ -694,6 +703,9 @@ where
     CharDecoder::new(chars.into_iter(), config)
 }
 
+/// Decodes UTF-8 base-116 data with the given config.
+///
+/// This function is like [`decode_bytes`], but takes a configuration object.
 pub fn decode_bytes_with<I>(
     bytes: I,
     config: DecodeConfig,
@@ -704,10 +716,16 @@ where
     BytesDecoder::new(bytes.into_iter(), config)
 }
 
+/// Decodes a base-116 `str` with the given config.
+///
+/// This function is like [`decode_str`], but takes a configuration object.
 pub fn decode_str_with(s: &str, config: DecodeConfig) -> StrDecoder<'_> {
     StrDecoder::new(s, config)
 }
 
+/// Takes a decoder and stores the contents in a [`Vec`].
+///
+/// This is equivalent to calling [`decoder.collect()`](Iterator::collect).
 #[cfg(feature = "alloc")]
 #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "alloc")))]
 pub fn decode_to_vec<D, E>(decoder: D) -> Result<Vec<u8>, E>

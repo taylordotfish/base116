@@ -1,21 +1,46 @@
 /*
  * Copyright (C) 2021 taylor.fish <contact@taylor.fish>
  *
- * This file is part of base116.
+ * This file is part of Base116.
  *
- * base116 is free software: you can redistribute it and/or modify
+ * Base116 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published
  * by the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * base116 is distributed in the hope that it will be useful,
+ * Base116 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Affero General Public License for more details.
  *
  * You should have received a copy of the GNU Affero General Public License
- * along with base116. If not, see <https://www.gnu.org/licenses/>.
+ * along with Base116. If not, see <https://www.gnu.org/licenses/>.
  */
+
+//! Base116 is like Base85, but it increases data size by only 7/6 instead of
+//! 5/4.
+//!
+//! Base116 exploits properties of UTF-8 to convert arbitrary binary data to
+//! valid, printable UTF-8, with less of a size overhead than is possible with
+//! any printable ASCII encoding.
+//!
+//! For example, this binary data (in hex):
+//!
+//! ```
+//! 9329bd4b43da0bfdd1d97bdf081a2d42ec540155
+//! ```
+//!
+//! is encoded as:
+//!
+//! ```
+//! Ǳ<Oȥґ|yO(WFic{2n㎨r~9*ǲ
+//! ```
+//!
+//! Wrapping ‘Ǳ’ and ‘ǲ’ characters are added by default to make encoded data
+//! easier to select, as the data may start or end with combining characters or
+//! characters from right-to-left scripts.
+//!
+//! This crate provides both a binary and a library.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "doc_cfg", feature(doc_cfg))]
