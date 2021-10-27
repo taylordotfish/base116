@@ -10,13 +10,13 @@ any printable ASCII encoding.
 
 For example, this binary data (in hex):
 
-```
+```text
 9329bd4b43da0bfdd1d97bdf081a2d42ec540155
 ```
 
 is encoded as:
 
-```
+```text
 Ǳ<Oȥґ|yO(WFic{2n㎨r~9*ǲ
 ```
 
