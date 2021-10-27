@@ -5,7 +5,7 @@ Base116 is like Base85, but it increases data size by only 7/6 instead of
 5/4.
 
 Base116 exploits properties of UTF-8 to convert arbitrary binary data to
-valid, printable UTF-8, with less of a size overhead than is possible with
+valid, printable UTF-8, with a lower size overhead than is possible with
 any printable ASCII encoding.
 
 For example, this binary data (in hex):
