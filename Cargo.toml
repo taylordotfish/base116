@@ -2,6 +2,13 @@
 name = "base116"
 version = "0.1.0"
 edition = "2018"
+description = "Like Base85… but 31 more."
+documentation = "https://docs.rs/base116"
+readme = "misc/crate-readme.md"
+repository = "https://github.com/taylordotfish/base116"
+license = "GPL-3.0-or-later"
+keywords = ["base", "encoding", "base64", "base85"]
+categories = ["command-line-utilities", "no-std"]
 
 [features]
 default = ["std"]
@@ -13,3 +20,6 @@ doc_cfg = []
 [[bin]]
 name = "base116"
 required-features = ["alloc"]
+
+[package.metadata.docs.rs]
+features = ["doc_cfg"]
