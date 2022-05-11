@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 taylor.fish <contact@taylor.fish>
+ * Copyright (C) 2021-2022 taylor.fish <contact@taylor.fish>
  *
  * This file is part of Base116.
  *
@@ -42,9 +42,8 @@ pub enum DecodeError {
     TrailingData(char),
 }
 
-pub type DecodeResult<T> = Result<T, DecodeError>;
-pub type DecodeBytesResult<T> = Result<T, DecodeBytesError>;
 use DecodeError as Error;
+pub type DecodeResult<T> = Result<T, DecodeError>;
 
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
@@ -100,6 +99,8 @@ pub enum DecodeBytesError {
     InvalidUtf8(InvalidUtf8),
     DecodeError(DecodeError),
 }
+
+pub type DecodeBytesResult<T> = Result<T, DecodeBytesError>;
 
 impl fmt::Display for DecodeBytesError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
@@ -252,7 +253,7 @@ where
             } else {
                 panic!(
                     "char ({:?}) unmapped to bad value: invalid digit: {}",
-                    c, n
+                    c, n,
                 );
             }
         }
@@ -349,7 +350,7 @@ where
                     len += 1;
                 })
             })
-            .and_then(|_| match len {
+            .and(match len {
                 0 => Ok(None),
                 1 => Err(Error::BadLength),
                 _ => Ok(Some(())),
@@ -383,11 +384,11 @@ impl<I: FusedIterator<Item = DecodeResult<Digit>>> FusedIterator
 }
 
 #[allow(clippy::type_complexity)]
-struct BaseDecoder<I>(
+pub struct CharDecoder<I>(
     Flatten<
         DigitsToUnflatBytes<
             Flatten<
-                CharsToUnflatDigits<UnwrapString<I>>,
+                CharsToUnflatDigits<UnwrapString<BaseIterator<I>>>,
                 CharsToUnflatDigitsItem,
             >,
         >,
@@ -395,47 +396,22 @@ struct BaseDecoder<I>(
     >,
 );
 
-impl<I> BaseDecoder<I> {
-    pub fn new(iter: I, config: DecodeConfig) -> Self {
+impl<I> CharDecoder<I> {
+    pub(crate) fn new(iter: I, config: DecodeConfig) -> Self {
         Self(Flatten::new(DigitsToUnflatBytes::new(Flatten::new(
-            CharsToUnflatDigits::new(UnwrapString::new(iter, config)),
+            CharsToUnflatDigits::new(UnwrapString::new(
+                BaseIterator(iter),
+                config,
+            )),
         ))))
     }
 }
 
-impl<I: InspectBaseIterator> InspectBaseIterator for BaseDecoder<I> {
-    type Iter = I::Iter;
+impl<I> InspectBaseIterator for CharDecoder<I> {
+    type Iter = I;
 
     fn base_iterator(&self) -> &Self::Iter {
         self.0.base_iterator()
-    }
-}
-
-impl<I> Iterator for BaseDecoder<I>
-where
-    I: Iterator<Item = char>,
-{
-    type Item = DecodeResult<u8>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
-    }
-
-    fn fold<B, F>(self, init: B, f: F) -> B
-    where
-        F: FnMut(B, Self::Item) -> B,
-    {
-        self.0.fold(init, f)
-    }
-}
-
-impl<I: FusedIterator<Item = char>> FusedIterator for BaseDecoder<I> {}
-
-pub struct CharDecoder<I>(BaseDecoder<BaseIterator<I>>);
-
-impl<I> CharDecoder<I> {
-    pub(crate) fn new(iter: I, config: DecodeConfig) -> Self {
-        Self(BaseDecoder::new(BaseIterator(iter), config))
     }
 }
 
@@ -553,17 +529,13 @@ where
 impl<I: FusedIterator<Item = u8>> FusedIterator for Utf8ToChars<I> {}
 
 pub struct BytesDecoder<I>(
-    BaseDecoder<
-        BaseIterator<ErrAdapter<Utf8ToChars<BaseIterator<I>>, InvalidUtf8>>,
-    >,
+    CharDecoder<ErrAdapter<Utf8ToChars<BaseIterator<I>>, InvalidUtf8>>,
 );
 
 impl<I> BytesDecoder<I> {
     pub(crate) fn new(iter: I, config: DecodeConfig) -> Self {
-        Self(BaseDecoder::new(
-            BaseIterator(ErrAdapter::new(Utf8ToChars::new(BaseIterator(
-                iter,
-            )))),
+        Self(CharDecoder::new(
+            ErrAdapter::new(Utf8ToChars::new(BaseIterator(iter))),
             config,
         ))
     }
@@ -610,11 +582,11 @@ where
 
 impl<I: FusedIterator<Item = u8>> FusedIterator for BytesDecoder<I> {}
 
-pub struct StrDecoder<'a>(BaseDecoder<BaseIterator<Chars<'a>>>);
+pub struct StrDecoder<'a>(CharDecoder<Chars<'a>>);
 
 impl<'a> StrDecoder<'a> {
     pub(crate) fn new(s: &'a str, config: DecodeConfig) -> Self {
-        Self(BaseDecoder::new(BaseIterator(s.chars()), config))
+        Self(CharDecoder::new(s.chars(), config))
     }
 }
 
@@ -670,7 +642,7 @@ pub struct DecodeConfig {
     pub require_wrapper: bool,
     /// If true, trailing data after the ending ‘ǲ’ character will be ignored,
     /// rather than causing an error. Additionally, if `require_wrapper` is
-    /// false, extra data before the starting ‘Ǳ’ character will also be
+    /// true, extra data before the starting ‘Ǳ’ character will also be
     /// ignored. [default: false]
     pub relaxed: bool,
 }

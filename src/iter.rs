@@ -111,7 +111,7 @@ where
     where
         F: FnMut(B, Self::Item) -> B,
     {
-        self.iter.fold(init, |b, item| item.fold(b, &mut f))
+        self.iter.fold(init, |b, sub| sub.fold(b, &mut f))
     }
 }
 
