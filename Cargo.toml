@@ -1,6 +1,6 @@
 [package]
 name = "base116"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2018"
 description = "Like Base85… but 31 more."
 documentation = "https://docs.rs/base116"

@@ -24,7 +24,7 @@ use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
 
 use core::array;
-use core::convert::{Infallible, TryFrom};
+use core::convert::TryFrom;
 use core::fmt::{self, Debug, Display, Formatter};
 use core::iter::{FusedIterator, Take};
 use core::str::Chars;
@@ -48,7 +48,7 @@ pub type DecodeResult<T> = Result<T, DecodeError>;
 impl fmt::Display for DecodeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         match self {
-            Self::BadChar(c) => write!(f, "bad character: {}", c),
+            Self::BadChar(c) => write!(f, "bad character: {:?}", c),
             Self::BadLength => write!(f, "bad input length"),
             Self::MissingStart => {
                 write!(f, "missing start character ({})", START_CHAR)
@@ -457,7 +457,9 @@ where
     }
 }
 
-impl<I: FusedIterator<Item = char>> FusedIterator for CharDecoder<I> {}
+// `UnwrapString` implements `FusedIterator`, so `CharDecoder` also can even
+// if `I` doesn't.
+impl<I: Iterator<Item = char>> FusedIterator for CharDecoder<I> {}
 
 fn size_hint_from_utf8_hint(
     hint: (usize, Option<usize>),
@@ -549,28 +551,46 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         let item = self.0.next();
-        if let Some(e) = self.0.base_iterator().take_err() {
-            return Some(Err(DecodeBytesError::InvalidUtf8(e)));
+        if !matches!(item, Some(Ok(_))) {
+            if let Some(e) = self.0.base_iterator().take_err() {
+                return Some(Err(DecodeBytesError::InvalidUtf8(e)));
+            }
         }
-        match item {
-            Some(Ok(b)) => Some(Ok(b)),
-            Some(Err(e)) => Some(Err(DecodeBytesError::DecodeError(e))),
-            None => None,
-        }
+        Some(match item? {
+            Ok(b) => Ok(b),
+            Err(e) => Err(DecodeBytesError::DecodeError(e)),
+        })
     }
 
-    fn fold<B, F>(mut self, init: B, mut f: F) -> B
+    fn fold<B, F>(mut self, mut init: B, mut f: F) -> B
     where
         F: FnMut(B, Self::Item) -> B,
     {
-        let b: Result<B, Infallible> = self.0.try_fold(init, |b, item| {
-            Ok(f(b, item.map_err(DecodeBytesError::DecodeError)))
-        });
-        let b = b.unwrap();
-        if let Some(e) = self.0.base_iterator().take_err() {
-            f(b, Err(DecodeBytesError::InvalidUtf8(e)))
-        } else {
-            b
+        loop {
+            let result = self.0.try_fold(init, |b, item| {
+                let item = match item {
+                    Ok(item) => item,
+                    Err(e) => return Err((b, e)),
+                };
+                Ok(f(b, Ok(item)))
+            });
+
+            let (mut b, err) = match result {
+                Ok(b) => (b, None),
+                Err((b, e)) => (b, Some(e)),
+            };
+
+            if let Some(e) = self.0.base_iterator().take_err() {
+                b = f(b, Err(DecodeBytesError::InvalidUtf8(e)));
+            }
+
+            if let Some(e) = err {
+                b = f(b, Err(DecodeBytesError::DecodeError(e)));
+            } else {
+                // Iteration is done because `try_fold` returned `Ok`.
+                return b;
+            }
+            init = b;
         }
     }
 
