@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 taylor.fish <contact@taylor.fish>
+ * Copyright (C) 2021-2022 taylor.fish <contact@taylor.fish>
  *
  * This file is part of Base116.
  *
@@ -97,13 +97,13 @@ fn show_version() -> ! {
 }
 
 macro_rules! args_error {
-    ($($args:tt)*) => {
+    ($($args:tt)*) => {{
         error_exit!(
             "{}\n{}",
             format_args!($($args)*),
             "See `base116 --help` for usage information.",
         );
-    };
+    }};
 }
 
 fn parse_args<'a, Args>(args: Args) -> ParsedArgs<'a>
@@ -113,58 +113,54 @@ where
     let mut decode = false;
     let mut wrap = true;
     let mut relaxed = false;
-    let mut file: Option<&'a OsStr> = None;
     let mut options_done = false;
 
-    let mut process_arg = |arg: &'a OsStr, astr: &str| {
-        match astr {
-            _ if options_done => {}
-            "-" => {}
-            "--" => {
-                options_done = true;
-                return;
-            }
-            "--help" => show_usage(),
-            "--version" => show_version(),
-            "--decode" => {
-                decode = true;
-                return;
-            }
-            "--no-wrapper" => {
-                wrap = false;
-                return;
-            }
-            "--relaxed" => {
-                relaxed = true;
-                return;
-            }
-            s if s.starts_with("--") => {
-                args_error!("unrecognized option: {}", s);
-            }
-            s if s.starts_with('-') => {
-                s.chars().skip(1).for_each(|c| match c {
-                    'h' => show_usage(),
-                    'v' => show_version(),
-                    'd' => {
-                        decode = true;
-                    }
-                    c => {
-                        args_error!("unrecognized option: -{}", c);
-                    }
-                });
-                return;
-            }
-            _ => {}
+    let mut process_arg = |arg: &str| match arg {
+        _ if options_done => true,
+        "--" => {
+            options_done = true;
+            false
         }
-        if file.replace(arg).is_some() {
-            args_error!("unexpected argument: {}", astr);
+        "--help" => show_usage(),
+        "--version" => show_version(),
+        "--decode" => {
+            decode = true;
+            false
         }
+        "--no-wrapper" => {
+            wrap = false;
+            false
+        }
+        "--relaxed" => {
+            relaxed = true;
+            false
+        }
+        s if s.starts_with("--") => {
+            args_error!("unrecognized option: {}", s);
+        }
+        s if s.starts_with('-') => s
+            .chars()
+            .skip(1)
+            .map(|c| match c {
+                'h' => show_usage(),
+                'v' => show_version(),
+                'd' => {
+                    decode = true;
+                }
+                c => {
+                    args_error!("unrecognized option: -{}", c);
+                }
+            })
+            .fold(true, |_, _| false),
+        _ => true,
     };
 
-    args.into_iter()
-        .map(|a| (a, a.to_string_lossy()))
-        .for_each(|(arg, astr)| process_arg(arg, &*astr));
+    let mut iter = args.into_iter().filter(|a| match a.to_str() {
+        Some(s) => process_arg(s),
+        None => args_error!("invalid argument: {:?}", a),
+    });
 
+    let file = iter.next();
     if relaxed && !decode {
         args_error!("--relaxed is allowed only when decoding");
     }
