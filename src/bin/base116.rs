@@ -161,6 +161,10 @@ where
     });
 
     let file = iter.next();
+    if let Some(s) = iter.next() {
+        args_error!("unexpected argument: {}", s.to_string_lossy());
+    }
+
     if relaxed && !decode {
         args_error!("--relaxed is allowed only when decoding");
     }
