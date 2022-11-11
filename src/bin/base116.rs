@@ -53,7 +53,7 @@ mod error_exit {
 
     macro_rules! error_exit {
         ($($args:tt)*) => {
-            crate::error_exit::__run(format_args!($($args)*));
+            crate::error_exit::__run(format_args!($($args)*))
         };
     }
 
@@ -97,13 +97,13 @@ fn show_version() -> ! {
 }
 
 macro_rules! args_error {
-    ($($args:tt)*) => {{
+    ($($args:tt)*) => {
         error_exit!(
             "{}\n{}",
             format_args!($($args)*),
             "See `base116 --help` for usage information.",
-        );
-    }};
+        )
+    };
 }
 
 fn parse_args<'a, Args>(args: Args) -> ParsedArgs<'a>
@@ -115,6 +115,7 @@ where
     let mut relaxed = false;
     let mut options_done = false;
 
+    // Returns whether `arg` should be considered a positional argument.
     let mut process_arg = |arg: &str| match arg {
         _ if options_done => true,
         "--" => {
