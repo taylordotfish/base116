@@ -134,6 +134,7 @@ where
                 Some(ranges::map_char(d1 + d2to3, RANGES3).unwrap())
             }
             _ => {
+                debug_assert!(d < 116);
                 // SAFETY: The invariants of `Digit` guarantee that it is
                 // less than 116.
                 unsafe { unreachable_unchecked() };

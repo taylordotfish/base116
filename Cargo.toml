@@ -1,7 +1,8 @@
 [package]
 name = "base116"
-version = "0.1.6"
+version = "0.1.6-dev"
 edition = "2018"
+rust-version = "1.55"
 description = "Like Base85… but 31 more."
 documentation = "https://docs.rs/base116"
 readme = "misc/crate-readme.md"
