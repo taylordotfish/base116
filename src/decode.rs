@@ -17,6 +17,8 @@
  * along with Base116. If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! Functions and types for decoding base-116 data.
+
 use super::iter::{BaseIterator, ErrAdapter, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
 use super::Digit;
@@ -32,17 +34,26 @@ use core::str::Chars;
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 
+/// An error encountered while decoding a [`str`] or sequence of [`char`]s.
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum DecodeError {
+    /// Encountered an unexpected character.
     BadChar(char),
+    /// The input was not the correct number of characters.
     BadLength,
+    /// The starting 'Ǳ' character was required but missing.
     MissingStart,
+    /// The ending 'ǲ' character was required but missing.
     MissingEnd,
+    /// There was unexpected data after the ending 'ǲ' character, and
+    /// [`DecodeConfig::relaxed`] was false.
     TrailingData(char),
 }
 
 use DecodeError as Error;
+
+/// Alias of <code>[Result]\<T, [DecodeError]></code>.
 pub type DecodeResult<T> = Result<T, DecodeError>;
 
 impl fmt::Display for DecodeError {
@@ -67,12 +78,14 @@ impl fmt::Display for DecodeError {
 #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "std")))]
 impl std::error::Error for DecodeError {}
 
+/// Error information for [`DecodeBytesError::InvalidUtf8`].
 pub struct InvalidUtf8 {
     bytes: [u8; 4],
     len: u8,
 }
 
 impl InvalidUtf8 {
+    /// The bytes that were invalid UTF-8.
     pub fn bytes(&self) -> &[u8] {
         &self.bytes[..usize::from(self.len)]
     }
@@ -94,12 +107,16 @@ impl Display for InvalidUtf8 {
 #[cfg_attr(feature = "doc_cfg", doc(cfg(feature = "std")))]
 impl std::error::Error for InvalidUtf8 {}
 
+/// An error encountered while decoding a sequence of bytes.
 #[derive(Debug)]
 pub enum DecodeBytesError {
+    /// The provided bytes were not valid UTF-8.
     InvalidUtf8(InvalidUtf8),
+    /// A different decoding error occurred.
     DecodeError(DecodeError),
 }
 
+/// Alias of <code>[Result]\<T, [DecodeBytesError]></code>.
 pub type DecodeBytesResult<T> = Result<T, DecodeBytesError>;
 
 impl fmt::Display for DecodeBytesError {
@@ -383,6 +400,7 @@ impl<I: FusedIterator<Item = DecodeResult<Digit>>> FusedIterator
 {
 }
 
+/// Iterator returned by [`decode_chars`].
 #[allow(clippy::type_complexity)]
 pub struct CharDecoder<I>(
     Flatten<
@@ -530,6 +548,7 @@ where
 
 impl<I: FusedIterator<Item = u8>> FusedIterator for Utf8ToChars<I> {}
 
+/// Iterator returned by [`decode_bytes`].
 pub struct BytesDecoder<I>(
     CharDecoder<ErrAdapter<Utf8ToChars<BaseIterator<I>>, InvalidUtf8>>,
 );
@@ -602,6 +621,7 @@ where
 
 impl<I: FusedIterator<Item = u8>> FusedIterator for BytesDecoder<I> {}
 
+/// Iterator returned by [`decode_str`].
 pub struct StrDecoder<'a>(CharDecoder<Chars<'a>>);
 
 impl<'a> StrDecoder<'a> {
@@ -668,6 +688,7 @@ pub struct DecodeConfig {
 }
 
 impl DecodeConfig {
+    /// Returns the default configuration.
     pub const fn new() -> Self {
         Self {
             require_wrapper: true,

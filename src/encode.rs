@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 taylor.fish <contact@taylor.fish>
+ * Copyright (C) 2021-2022 taylor.fish <contact@taylor.fish>
  *
  * This file is part of Base116.
  *
@@ -16,6 +16,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with Base116. If not, see <https://www.gnu.org/licenses/>.
  */
+
+//! Functions and types for encoding base-116 data.
 
 use super::iter::{BaseIterator, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
@@ -151,6 +153,7 @@ enum CharEncoderState {
     Done,
 }
 
+/// Iterator returned by [`encode_to_chars`].
 pub struct CharEncoder<I> {
     config: EncodeConfig,
     state: CharEncoderState,
@@ -282,6 +285,7 @@ where
 
 impl<I: FusedIterator<Item = char>> FusedIterator for CharsToUnflatUtf8<I> {}
 
+/// Iterator returned by [`encode_to_bytes`].
 pub struct Utf8Encoder<I>(
     Flatten<CharsToUnflatUtf8<CharEncoder<I>>, CharsToUnflatUtf8Item>,
 );
@@ -376,6 +380,7 @@ pub struct EncodeConfig {
 }
 
 impl EncodeConfig {
+    /// Returns the default configuration.
     pub const fn new() -> Self {
         Self {
             add_wrapper: true,

@@ -45,7 +45,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "doc_cfg", feature(doc_cfg))]
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(clippy::unnecessary_lazy_evaluations)]
 
 #[macro_use]
 mod digit;
