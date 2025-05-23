@@ -20,12 +20,12 @@
 use std::ffi::OsStr;
 use std::fmt::{Debug, Display};
 use std::fs::File;
-use std::io::{stdin, stdout, BufReader, BufWriter, Read, Stdout, Write};
+use std::io::{BufReader, BufWriter, Read, Stdout, Write, stdin, stdout};
 use std::path::Path;
 use std::process::exit;
 
-use base116::decode::{decode_bytes_with, DecodeConfig};
-use base116::encode::{encode_to_bytes_with, EncodeConfig};
+use base116::decode::{DecodeConfig, decode_bytes_with};
+use base116::encode::{EncodeConfig, encode_to_bytes_with};
 
 const USAGE: &str = "\
 Usage: base116 [options] [file]
@@ -34,22 +34,22 @@ Encodes or decodes base-116 data from [file] and writes the result to standard
 output. If [file] is missing or -, the data is read from standard input.
 
 Options:
-  -d --decode   Decode data instead of encoding
+  -d, --decode   Decode data instead of encoding
 
-  --no-wrapper  When decoding, don't require wrapping 'Ǳ' and 'ǲ' characters.
-                When encoding, don't output wrapper characters.
+  --no-wrapper   When decoding, don't require wrapping 'Ǳ' and 'ǲ' characters.
+                 When encoding, don't output wrapper characters.
 
-  --relaxed     When decoding, ignore trailing data after ending 'ǲ'
-                character. Also ignore data before starting 'Ǳ' character,
-                unless --no-wrapper is set.
+  --relaxed      When decoding, ignore trailing data after ending 'ǲ'
+                 character. Also ignore data before starting 'Ǳ' character,
+                 unless --no-wrapper is set.
 
-  -h --help     Show this help message
-  -v --version  Show program version
+  -h, --help     Show this help message
+  -v, --version  Show program version
 ";
 
 #[macro_use]
 mod error_exit {
-    use super::{exit, Display};
+    use super::{Display, exit};
 
     macro_rules! error_exit {
         ($($args:tt)*) => {

@@ -1,6 +1,6 @@
 [package]
 name = "base116"
-version = "0.1.8"
+version = "0.1.9"
 edition = "2018"
 rust-version = "1.55"
 description = "Like Base85… but 31 more."

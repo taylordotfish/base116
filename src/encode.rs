@@ -19,9 +19,9 @@
 
 //! Functions and types for encoding base-116 data.
 
+use super::Digit;
 use super::iter::{BaseIterator, Flatten, InspectBaseIterator};
 use super::ranges::{self, RANGES1, RANGES2, RANGES3};
-use super::Digit;
 use super::{BYTES_PER_CHUNK, DIGITS_PER_CHUNK, END_CHAR, START_CHAR};
 use super::{L1_MULT, L2_MULT};
 
@@ -293,7 +293,8 @@ pub struct Utf8Encoder<I>(
 impl<I: Iterator> Utf8Encoder<I> {
     pub(crate) fn new(iter: I, config: EncodeConfig) -> Self {
         Self(Flatten::new(CharsToUnflatUtf8::new(CharEncoder::new(
-            iter, config,
+            iter,
+            config,
         ))))
     }
 }
