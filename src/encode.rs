@@ -435,7 +435,7 @@ where
 {
     let utf8: Vec<u8> = encode_to_bytes_with(bytes, config).collect();
     if cfg!(debug_assertions) {
-        std::str::from_utf8(&utf8).expect("invalid utf-8: this is UB!");
+        core::str::from_utf8(&utf8).expect("invalid utf-8: this is UB!");
     }
 
     // SAFETY: `Utf8Encoder` always produces valid UTF-8.
