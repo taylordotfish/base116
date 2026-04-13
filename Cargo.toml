@@ -1,13 +1,16 @@
 [package]
 name = "base116"
-version = "0.1.11-dev"
+version = "0.1.11"
 edition = "2018"
 rust-version = "1.55"
 description = "Like Base85… but 31 more."
 documentation = "https://docs.rs/base116"
 readme = "misc/crate-readme.md"
 repository = "https://github.com/taylordotfish/base116"
-license = "AGPL-3.0-or-later"
+# AdditionRef-Eips-exceptions refers to the Eips Exceptions,
+# as found in the `licenses` directory or at
+# <https://codeberg.org/taylordotfish/eips-exceptions>.
+license = "AGPL-3.0-or-later WITH AdditionRef-Eips-exceptions"
 keywords = ["base", "encoding", "base64", "base85"]
 categories = ["command-line-utilities", "no-std"]
 

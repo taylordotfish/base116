@@ -54,8 +54,23 @@ License
 Base116 is licensed under version 3 of the GNU Affero General Public License,
 or (at your option) any later version. See [LICENSE](LICENSE).
 
+In addition, the [Eips Exceptions](licenses/Eips-Exceptions) apply to Base116.
+These exceptions are additional permissions under section 7 of the GNU AGPL,
+version 3; as such, if you modify Base116, you may choose whether to extend
+them to your modified version. For more information about these exceptions, see
+[this repository](https://codeberg.org/taylordotfish/eips-exceptions).
+
+Please note that you do not have to license your project under the AGPL if you
+use Base116. Your project can be licensed under any AGPLv3-compatible license,
+including nearly all permissive licenses such as MIT or Apache 2.0. The terms
+of the AGPL will apply only to the combination of your project with Base116
+(e.g., source code must be provided along with any compiled binaries); any
+portion of your project that does not depend on Base116 may be used without
+adherence to the AGPL.
+
 Contributing
 ------------
 
 By contributing to Base116, you agree that your contribution may be used
-according to the terms of Base116’s license.
+according to the terms of Base116’s license, including the Eips Lesser Network
+Exception and Eips Peer-to-Peer Exception.

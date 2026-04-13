@@ -11,6 +11,16 @@ Changelog
   treated as a positional argument.
 * Removed erroneous implementation of `FusedIterator` on an internal type. This
   does not appear to have been used in practice.
+* Added the [Eips Exceptions](licenses/Eips-Exceptions) to Base116's
+  license.[^1] These exceptions retroactively apply to all previous versions of
+  Base116.
+
+[^1]: Note from taylor.fish: Base116 contains one commit that was not authored
+by me. The commit consists of changing one instance of `std` to `core` in order
+to fix a compilation error. While I am appreciative of the fix, I do not
+believe this change meets the threshold of originality under United States
+copyright law; therefore, I believe I have the ability to add exceptions to
+Base116's license.
 
 0.1.10
 ------

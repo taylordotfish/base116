@@ -15,6 +15,11 @@
  *
  * You should have received a copy of the GNU Affero General Public License
  * along with Base116. If not, see <https://www.gnu.org/licenses/>.
+ *
+ * The Eips Exceptions also apply to Base116. These exceptions are additional
+ * permissions under section 7 of the GNU Affero General Public License,
+ * version 3. You should have received a copy of these exceptions; if not,
+ * see <https://codeberg.org/taylordotfish/eips-exceptions>.
  */
 
 //! Functions and types for decoding base-116 data.
