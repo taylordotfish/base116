@@ -601,9 +601,7 @@ where
 
             if let Some(e) = self.0.base_iterator().take_err() {
                 b = f(b, Err(DecodeBytesError::InvalidUtf8(e)));
-            }
-
-            if let Some(e) = err {
+            } else if let Some(e) = err {
                 b = f(b, Err(DecodeBytesError::DecodeError(e)));
             } else {
                 // Iteration is done because `try_fold` returned `Ok`.
