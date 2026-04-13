@@ -158,7 +158,7 @@ where
 
     let mut iter = args.into_iter().filter(|a| match a.to_str() {
         Some(s) => process_arg(s),
-        None => args_error!("invalid argument: {:?}", a),
+        None => true,
     });
 
     let file = iter.next();
