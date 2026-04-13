@@ -72,5 +72,4 @@ Contributing
 ------------
 
 By contributing to Base116, you agree that your contribution may be used
-according to the terms of Base116’s license, including the Eips Lesser Network
-Exception and Eips Peer-to-Peer Exception.
+according to the terms of Base116’s license, including the Eips Exceptions.
