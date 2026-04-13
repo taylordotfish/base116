@@ -122,12 +122,12 @@ impl<I, Sub: Iterator> FusedIterator for Flatten<I, Sub> where
 
 /// Turns an iterator of `Result<T, E>` into an iterator of `T` while allowing
 /// any errors to be fetched with [`Self::take_err`].
-pub struct ErrAdapter<I, Err> {
+pub struct ErrAdapter<I, E> {
     iter: I,
-    err: Cell<Option<Err>>,
+    err: Cell<Option<E>>,
 }
 
-impl<I, Err> ErrAdapter<I, Err> {
+impl<I, E> ErrAdapter<I, E> {
     pub fn new(iter: I) -> Self {
         Self {
             iter,
@@ -135,12 +135,12 @@ impl<I, Err> ErrAdapter<I, Err> {
         }
     }
 
-    pub fn take_err(&self) -> Option<Err> {
+    pub fn take_err(&self) -> Option<E> {
         self.err.take()
     }
 }
 
-impl<I: InspectBaseIterator, Err> InspectBaseIterator for ErrAdapter<I, Err> {
+impl<I: InspectBaseIterator, E> InspectBaseIterator for ErrAdapter<I, E> {
     type Iter = I::Iter;
 
     fn base_iterator(&self) -> &Self::Iter {
@@ -148,9 +148,9 @@ impl<I: InspectBaseIterator, Err> InspectBaseIterator for ErrAdapter<I, Err> {
     }
 }
 
-impl<I, Err, T> Iterator for ErrAdapter<I, Err>
+impl<I, E, T> Iterator for ErrAdapter<I, E>
 where
-    I: Iterator<Item = Result<T, Err>>,
+    I: Iterator<Item = Result<T, E>>,
 {
     type Item = T;
 
@@ -167,9 +167,4 @@ where
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, self.iter.size_hint().1)
     }
-}
-
-impl<I, Err, T> FusedIterator for ErrAdapter<I, Err> where
-    I: Iterator<Item = Result<T, Err>>
-{
 }
